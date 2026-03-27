@@ -3,6 +3,26 @@ import pandas as pd
 import numpy as np
 import math
 
+# scipy brentq — with pure-Python fallback (bisection) for Streamlit Cloud
+try:
+    from scipy.optimize import brentq as _brentq
+except ImportError:
+    def _brentq(f, a, b, xtol=1e-6, maxiter=500):
+        """Pure-Python bisection fallback when scipy is unavailable."""
+        fa, fb = f(a), f(b)
+        if fa * fb > 0:
+            raise ValueError("f(a) and f(b) must have opposite signs")
+        for _ in range(maxiter):
+            mid = (a + b) / 2.0
+            fm  = f(mid)
+            if abs(fm) < xtol or (b - a) / 2.0 < xtol:
+                return mid
+            if fa * fm < 0:
+                b, fb = mid, fm
+            else:
+                a, fa = mid, fm
+        return (a + b) / 2.0
+
 # ─────────────────────────────────────────────
 #  PAGE CONFIG
 # ─────────────────────────────────────────────
@@ -314,26 +334,18 @@ def compute_keff_from_subbase_mr(esb_mr, k_subgrade):
     return k_corr
 
 def compute_sn_required(esal, r0_pct, so, pi, pt):
-    """
-    AASHTO 1993 SN required via iterative solution.
-    log10(W18) = ZR*So + 9.36*log10(SN+1) - 0.20
-                 + log10(ΔPSI/4.2-1.5)/(0.40+1094/(SN+1)^5.19)
-                 + 2.32*log10(Mr) - 8.07
-    Returns SN_req (solved numerically for given Mr).
-    """
-    from scipy.optimize import brentq
+    """Helper – returns ZR for a given reliability (kept for backward compat)."""
     ZR_map = {50: 0.0, 60: -0.253, 70: -0.524, 75: -0.674,
               80: -0.841, 85: -1.037, 90: -1.282,
               91: -1.340, 92: -1.405, 93: -1.476,
               94: -1.555, 95: -1.645, 96: -1.751,
               97: -1.881, 98: -2.054, 99: -2.327}
-    ZR = ZR_map.get(int(r0_pct), -1.282)
-    return ZR
+    return ZR_map.get(int(r0_pct), -1.282)
 
 def aashto_sn_required_flex(esal, zr, so, pi, pt, mr_psi):
-    """Return required SN given design inputs."""
+    """Return required SN given design inputs (AASHTO 1993 flexible)."""
     delta_psi = pi - pt
-    logW18 = math.log10(esal)
+    logW18 = math.log10(max(esal, 1))
 
     def equation(SN):
         if SN <= 0:
@@ -345,7 +357,7 @@ def aashto_sn_required_flex(esal, zr, so, pi, pt, mr_psi):
         return term1 + term2 + term3 + term4 - logW18
 
     try:
-        sn = brentq(equation, 0.1, 30, xtol=1e-4)
+        sn = _brentq(equation, 0.1, 30, xtol=1e-4)
     except Exception:
         sn = None
     return sn
@@ -359,7 +371,6 @@ def aashto_keff_rigid(esal, zr, so, pi, pt, ec_psi, sc_psi, j, cd, d_in):
                    (215.63*J*(D^0.75 - 18.42/(Ec/k)^0.25)))
     Solve for k (keff).
     """
-    from scipy.optimize import brentq
     delta_psi = pi - pt
     logW18 = math.log10(max(esal, 1))
 
@@ -380,7 +391,7 @@ def aashto_keff_rigid(esal, zr, so, pi, pt, ec_psi, sc_psi, j, cd, d_in):
             return -1e10
 
     try:
-        k = brentq(equation, 1, 3000, xtol=0.1)
+        k = _brentq(equation, 1, 3000, xtol=0.1)
     except Exception:
         k = 3000  # cap
     return k
