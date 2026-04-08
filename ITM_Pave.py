@@ -343,7 +343,13 @@ def compute_sn_required(esal, r0_pct, so, pi, pt):
     return ZR_map.get(int(r0_pct), -1.282)
 
 def aashto_sn_required_flex(esal, zr, so, pi, pt, mr_psi):
-    """Return required SN given design inputs (AASHTO 1993 flexible)."""
+    """Return required SN given design inputs (AASHTO 1993 flexible).
+    Ref: AASHTO Guide for Design of Pavement Structures 1993, Eq. 3.1
+    log10(W18) = ZR*So + 9.36*log10(SN+1) - 0.20
+               + log10(ΔPSI/2.7) / (0.40 + 1094/(SN+1)^5.19)
+               + 2.32*log10(Mr) - 8.07
+    where ΔPSI = Pi - Pt, and 2.7 = (4.2 - 1.5)
+    """
     delta_psi = pi - pt
     logW18 = math.log10(max(esal, 1))
 
@@ -352,7 +358,7 @@ def aashto_sn_required_flex(esal, zr, so, pi, pt, mr_psi):
             return -1e10
         term1 = zr * so
         term2 = 9.36 * math.log10(SN + 1) - 0.20
-        term3 = math.log10(delta_psi / 4.2) / (0.40 + 1094 / (SN + 1)**5.19)
+        term3 = math.log10(delta_psi / 2.7) / (0.40 + 1094 / (SN + 1)**5.19)
         term4 = 2.32 * math.log10(mr_psi) - 8.07
         return term1 + term2 + term3 + term4 - logW18
 
@@ -380,7 +386,8 @@ def aashto_keff_rigid(esal, zr, so, pi, pt, ec_psi, sc_psi, j, cd, d_in):
         try:
             term1 = zr * so
             term2 = 7.35 * math.log10(d_in + 1) - 0.06
-            term3 = math.log10(delta_psi / 4.5) / (1 + 1.624e7 / (d_in + 1)**8.46)
+            # AASHTO 1993 Eq.3.28: denominator = (4.5-1.5) = 3.0
+            term3 = math.log10(delta_psi / 3.0) / (1 + 1.624e7 / (d_in + 1)**8.46)
             inner = (sc_psi * cd * (d_in**0.75 - 1.132) /
                      (215.63 * j * (d_in**0.75 - 18.42 / (ec_psi / k)**0.25)))
             if inner <= 0:
@@ -504,7 +511,11 @@ with tab1:
     veh_data_r = {}
     vehicle_order = ["MB", "HB", "MT", "HT", "TR", "STR"]
 
-    hdr = st.columns([2, 1.5, 1.5, 1.5, 2, 2, 2, 2, 2, 2])
+    # Dynamic column widths: [type, single, tandem, tridam, count] + N slab cols
+    _slab_n   = len(SLAB_THICKNESSES)          # 5 now
+    _col_w    = [2, 1.5, 1.5, 1.5, 2] + [1.8] * _slab_n
+
+    hdr = st.columns(_col_w)
     hdr[0].markdown("**ประเภทรถ**")
     hdr[1].markdown("**Single Axle**")
     hdr[2].markdown("**Tandem Axle**")
@@ -514,7 +525,7 @@ with tab1:
         hdr[5+i].markdown(f"**EALF Slab {t}cm**")
 
     for vtype in vehicle_order:
-        cols = st.columns([2, 1.5, 1.5, 1.5, 2, 2, 2, 2, 2, 2])
+        cols = st.columns(_col_w)
         tf_data = RIGID_TF[vtype]["tf"]
         ax = RIGID_TF[vtype]["axles"][0]
 
@@ -538,7 +549,7 @@ with tab1:
         st.markdown("---")
         st.markdown("### 📋 ผลการคำนวณ ESAL – ผิวทางคอนกรีต")
 
-        cols = st.columns(4)
+        cols = st.columns(len(SLAB_THICKNESSES))
         for i, t in enumerate(SLAB_THICKNESSES):
             with cols[i]:
                 st.markdown(f"""
@@ -595,7 +606,10 @@ with tab2:
     st.markdown('<div class="section-card"><h4>🚛 ประเภทและจำนวนยานพาหนะ (2 ทิศทาง ตลอดอายุออกแบบ)</h4>', unsafe_allow_html=True)
 
     veh_data_f = {}
-    hdr2 = st.columns([2, 1.5, 1.5, 1.5, 2, 2, 2, 2, 2])
+    _sn_n  = len(user_sn_values)
+    _col_w2 = [2, 1.5, 1.5, 1.5, 2] + [1.8] * _sn_n
+
+    hdr2 = st.columns(_col_w2)
     hdr2[0].markdown("**ประเภทรถ**")
     hdr2[1].markdown("**Single Axle**")
     hdr2[2].markdown("**Tandem Axle**")
@@ -605,8 +619,7 @@ with tab2:
         hdr2[5+i].markdown(f"**EALF SN={sn}**")
 
     for vtype in vehicle_order:
-        cols2 = st.columns([2, 1.5, 1.5, 1.5, 2, 2, 2, 2, 2])
-        tf_data_f = FLEX_TF[vtype]["tf"]
+        cols2 = st.columns(_col_w2)
         ax = RIGID_TF[vtype]["axles"][0]
 
         cols2[0].markdown(f"**{VEHICLE_LABELS[vtype]}**")
@@ -651,7 +664,7 @@ with tab2:
         st.markdown("---")
         st.markdown("### 📋 ผลการคำนวณ ESAL – ผิวทางลาดยาง")
 
-        cols = st.columns(4)
+        cols = st.columns(len(user_sn_values))
         for i, sn in enumerate(user_sn_values):
             with cols[i]:
                 st.markdown(f"""
@@ -791,12 +804,19 @@ with tab4:
         cbr_rd = st.number_input("Subgrade CBR (%)", value=3.0, step=0.5,
                                   min_value=0.5, max_value=100.0, key="cbr_rd")
     with c2:
-        # Auto-compute Mr from CBR (AASHTO: Mr(psi) = 1500×CBR, convert to MPa)
         mr_auto_psi = 1500.0 * cbr_rd
         mr_auto_mpa = mr_auto_psi / 145.038
-        mr_sub_mpa  = st.number_input("Mr of Subgrade (MPa) [คำนวณอัตโนมัติจาก CBR แก้ไขได้]",
-                                       value=round(mr_auto_mpa, 2), step=0.5,
-                                       min_value=1.0, key="mr_sub_mpa")
+        # Store auto value; only override widget default when CBR actually changes
+        prev_cbr = st.session_state.get("_cbr_rd_prev", None)
+        if prev_cbr != cbr_rd:
+            st.session_state["_mr_sub_mpa_val"] = round(mr_auto_mpa, 2)
+            st.session_state["_cbr_rd_prev"]    = cbr_rd
+        mr_sub_mpa = st.number_input(
+            "Mr of Subgrade (MPa) [อัตโนมัติจาก CBR — แก้ไขได้]",
+            value=st.session_state.get("_mr_sub_mpa_val", round(mr_auto_mpa, 2)),
+            step=0.5, min_value=1.0, key="mr_sub_mpa"
+        )
+        st.session_state["_mr_sub_mpa_val"] = mr_sub_mpa
     with c3:
         mr_sub_psi = mr_sub_mpa * 145.038
         mr_sub_pci = mr_sub_psi / 19.4
@@ -939,11 +959,16 @@ with tab5:
         with c2:
             mr_f_auto_psi = 1500.0 * cbr_f
             mr_f_auto_mpa = mr_f_auto_psi / 145.038
+            prev_cbr_f = st.session_state.get("_cbr_f_prev", None)
+            if prev_cbr_f != cbr_f:
+                st.session_state["_mr_sub_f_mpa_val"] = round(mr_f_auto_mpa, 2)
+                st.session_state["_cbr_f_prev"]       = cbr_f
             mr_sub_f_mpa = st.number_input(
-                "Mr of Subgrade (MPa) [อัตโนมัติจาก CBR แก้ไขได้]",
-                value=round(mr_f_auto_mpa, 2), step=0.5,
-                min_value=1.0, key="mr_sub_f_mpa"
+                "Mr of Subgrade (MPa) [อัตโนมัติจาก CBR — แก้ไขได้]",
+                value=st.session_state.get("_mr_sub_f_mpa_val", round(mr_f_auto_mpa, 2)),
+                step=0.5, min_value=1.0, key="mr_sub_f_mpa"
             )
+            st.session_state["_mr_sub_f_mpa_val"] = mr_sub_f_mpa
             mr_sub_f_psi = mr_sub_f_mpa * 145.038
         with c3:
             st.markdown(f"""
