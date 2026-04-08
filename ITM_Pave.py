@@ -145,31 +145,20 @@ button[kind="primary"] {
 #  LOOKUP DATA  (AASHTO 1993)
 # ─────────────────────────────────────────────
 
-# Truck Factor lookup for Rigid pavement (Slab 25,28,30,32 cm) at Pt=2.5
-# Source: FR Pave V1.0 reference tables
-RIGID_TF = {
-    "MB":  {"axles": [(1,4,0,0,0,0), (1,11,0,0,0,0)],
-             "tf": {25:3.63, 28:3.70, 30:3.72, 32:3.73, 35:3.74}},
-    "HB":  {"axles": [(1,5,1,20,0,0)],
-             "tf": {25:5.86, 28:6.07, 30:6.15, 32:6.20, 35:6.24}},
-    "MT":  {"axles": [(1,4,0,0,0,0), (1,11,0,0,0,0)],
-             "tf": {25:3.63, 28:3.70, 30:3.72, 32:3.73, 35:3.74}},
-    "HT":  {"axles": [(1,5,1,20,0,0)],
-             "tf": {25:5.86, 28:6.07, 30:6.15, 32:6.20, 35:6.24}},
-    "TR":  {"axles": [(1,5,1,20,0,0), (2,11,0,0,0,0)],
-             "tf": {25:13.03, 28:13.37, 30:13.50, 32:13.57, 35:13.63}},
-    "STR": {"axles": [(1,5,2,20,0,0)],
-             "tf": {25:11.60, 28:12.02, 30:12.18, 32:12.27, 35:12.34}},
-}
-
-# Truck Factor lookup for Flexible pavement (SN 6.5,7.1,7.5,8) at Pt=2.5
-FLEX_TF = {
-    "MB":  {"tf": {6.5:3.55, 7.1:3.65, 7.5:3.70, 8.0:3.75}},
-    "HB":  {"tf": {6.5:3.36, 7.1:3.42, 7.5:3.45, 8.0:3.47}},
-    "MT":  {"tf": {6.5:3.55, 7.1:3.65, 7.5:3.70, 8.0:3.75}},
-    "HT":  {"tf": {6.5:3.36, 7.1:3.42, 7.5:3.45, 8.0:3.47}},
-    "TR":  {"tf": {6.5:10.36, 7.1:10.62, 7.5:10.76, 8.0:10.89}},
-    "STR": {"tf": {6.5:6.60, 7.1:6.72, 7.5:6.78, 8.0:6.83}},
+# ─────────────────────────────────────────────
+#  VEHICLE AXLE CONFIGURATIONS
+#  Each axle group: (L1_ton, L2_axle_code, count)
+#  L2: 1=single, 2=tandem, 3=tridem
+#  Loads from Thai DOH standard / FR Pave V1.0
+# ─────────────────────────────────────────────
+VEHICLE_AXLES = {
+    #         axle groups: [(L1_ton, L2, count), ...]
+    "MB":  [(4,  1, 1), (11, 1, 1)],          # steer 4t + rear single 11t
+    "HB":  [(5,  1, 1), (20, 2, 1)],          # steer 5t + drive tandem 20t
+    "MT":  [(4,  1, 1), (11, 1, 1)],          # same as MB
+    "HT":  [(5,  1, 1), (20, 2, 1)],          # same as HB
+    "TR":  [(5,  1, 1), (20, 2, 1), (11, 1, 2)],  # steer 5t + drive tandem 20t + 2 trailer singles 11t
+    "STR": [(5,  1, 1), (20, 2, 2)],          # steer + 2 drive tandems
 }
 
 VEHICLE_LABELS = {
@@ -180,6 +169,97 @@ VEHICLE_LABELS = {
     "TR":  "Trailer (TR)",
     "STR": "Semi Trailer (STR)",
 }
+
+# Lookup Table at Pt=2.5 (FR Pave V1.0 reference) — used only for display comparison
+RIGID_TF_REF = {
+    "MB":  {25:3.63, 28:3.70, 30:3.72, 32:3.73, 35:3.74},
+    "HB":  {25:5.86, 28:6.07, 30:6.15, 32:6.20, 35:6.24},
+    "MT":  {25:3.63, 28:3.70, 30:3.72, 32:3.73, 35:3.74},
+    "HT":  {25:5.86, 28:6.07, 30:6.15, 32:6.20, 35:6.24},
+    "TR":  {25:13.03, 28:13.37, 30:13.50, 32:13.57, 35:13.63},
+    "STR": {25:11.60, 28:12.02, 30:12.18, 32:12.27, 35:12.34},
+}
+FLEX_TF_REF = {
+    "MB":  {6.5:3.55, 7.1:3.65, 7.5:3.70, 8.0:3.75},
+    "HB":  {6.5:3.36, 7.1:3.42, 7.5:3.45, 8.0:3.47},
+    "MT":  {6.5:3.55, 7.1:3.65, 7.5:3.70, 8.0:3.75},
+    "HT":  {6.5:3.36, 7.1:3.42, 7.5:3.45, 8.0:3.47},
+    "TR":  {6.5:10.36, 7.1:10.62, 7.5:10.76, 8.0:10.89},
+    "STR": {6.5:6.60, 7.1:6.72, 7.5:6.78, 8.0:6.83},
+}
+
+# ─────────────────────────────────────────────
+#  AASHTO 1993 EALF ENGINE
+# ─────────────────────────────────────────────
+TON_TO_KIP = 2.2046
+
+def ealf_flex_axle(L1_ton: float, L2: int, SN: float, Pt: float) -> float:
+    """
+    EALF for one axle group — Flexible pavement (AASHTO 1993 App. D).
+
+    สมการ: log(Wtx/Wt18) = 4.79*log(19) - 4.79*log(Lx+L2) + 4.33*log(L2) + Gt/Bx - Gt/B18
+    → log(EALF) = 4.79*log(Lx+L2) - 4.33*log(L2) - 4.79*log(19) + Gt*(1/B18 - 1/Bx)
+
+    L1_ton : axle group load (metric ton)
+    L2     : 1=single, 2=tandem, 3=tridem
+    SN     : Structural Number
+    Pt     : Terminal Serviceability
+    """
+    L1  = L1_ton * TON_TO_KIP                          # ton → kips
+    Gt  = math.log10((4.2 - Pt) / (4.2 - 1.5))        # = log10(ΔPSI/2.7)
+    Bx  = 0.40 + 0.081*(L1 + L2)**3.23 / ((SN+1)**5.19 * L2**3.23)
+    B18 = 0.40 + 0.081*(18  + 1)**3.23 / ((SN+1)**5.19 * 1.0**3.23)
+    log_ealf = (4.79*math.log10(L1 + L2)
+                - 4.33*math.log10(L2)
+                - 4.79*math.log10(19)
+                + Gt * (1/B18 - 1/Bx))
+    return 10**log_ealf
+
+def ealf_rigid_axle(L1_ton: float, L2: int, D_cm: float, Pt: float) -> float:
+    """
+    EALF for one axle group — Rigid pavement (AASHTO 1993 App. D).
+
+    สมการจากภาพ:
+    log(Wtx/Wt18) = 4.62*log(19) - 4.62*log(Lx+L2) + 3.28*log(L2) + Gt/Bx - Gt/B18
+    → log(EALF) = 4.62*log(Lx+L2) - 3.28*log(L2) - 4.62*log(19) + Gt*(1/B18 - 1/Bx)
+
+    L1_ton : axle group load (metric ton)
+    L2     : 1=single, 2=tandem, 3=tridem
+    D_cm   : slab thickness (cm)
+    Pt     : Terminal Serviceability
+    """
+    L1 = L1_ton * TON_TO_KIP                           # ton → kips
+    D  = D_cm / 2.54                                   # cm → inches
+    Gt  = math.log10((4.5 - Pt) / (4.5 - 1.5))        # = log10(ΔPSI/3.0)
+    Bx  = 1.0 + 3.63*(L1 + L2)**5.20 / ((D+1)**8.46 * L2**3.52)
+    B18 = 1.0 + 3.63*(18  + 1)**5.20 / ((D+1)**8.46 * 1.0**3.52)
+    log_ealf = (4.62*math.log10(L1 + L2)
+                - 3.28*math.log10(L2)
+                - 4.62*math.log10(19)
+                + Gt * (1/B18 - 1/Bx))
+    return 10**log_ealf
+
+def truck_factor_flex(vtype: str, SN: float, Pt: float) -> float:
+    """Truck Factor = sum of EALF over all axle groups for one vehicle."""
+    return sum(
+        ealf_flex_axle(L1, L2, SN, Pt) * cnt
+        for L1, L2, cnt in VEHICLE_AXLES[vtype]
+    )
+
+def truck_factor_rigid(vtype: str, D_cm: float, Pt: float) -> float:
+    """Truck Factor = sum of EALF over all axle groups for one vehicle."""
+    return sum(
+        ealf_rigid_axle(L1, L2, D_cm, Pt) * cnt
+        for L1, L2, cnt in VEHICLE_AXLES[vtype]
+    )
+
+def ealf_table_flex(vtype: str, sn_list: list, Pt: float) -> dict:
+    """Return {SN: TF} for display."""
+    return {sn: truck_factor_flex(vtype, sn, Pt) for sn in sn_list}
+
+def ealf_table_rigid(vtype: str, thick_list: list, Pt: float) -> dict:
+    """Return {D_cm: TF} for display."""
+    return {d: truck_factor_rigid(vtype, d, Pt) for d in thick_list}
 
 # Layer material library
 RIGID_LAYER_MATERIALS = {
@@ -209,7 +289,8 @@ FLEX_LAYER_MATERIALS = {
 }
 
 SLAB_THICKNESSES = [25, 28, 30, 32, 35]
-SN_VALUES = [6.5, 7.1, 7.5, 8.0]
+SN_VALUES        = [6.5, 7.1, 7.5, 8.0]
+
 
 # ─────────────────────────────────────────────
 #  ENGINE FUNCTIONS
@@ -217,60 +298,59 @@ SN_VALUES = [6.5, 7.1, 7.5, 8.0]
 
 def cbr_to_mr(cbr: float) -> float:
     """Convert CBR to Resilient Modulus (psi) — AASHTO 1993"""
-    return 1500 * cbr
+    return 1500.0 * cbr
 
-def compute_esal_rigid(vehicles, ldf, ddf):
-    """Compute ESAL for rigid pavement per slab thickness."""
+def compute_esal_rigid(vehicles: dict, ldf: float, ddf: float, Pt: float) -> dict:
+    """Compute ESAL for rigid pavement per slab thickness using AASHTO equation."""
     results = {}
     for thick in SLAB_THICKNESSES:
         esal = 0.0
         for vtype, count in vehicles.items():
             if count <= 0:
                 continue
-            tf = RIGID_TF[vtype]["tf"][thick]
+            tf = truck_factor_rigid(vtype, thick, Pt)
             esal += count * tf * ldf * ddf
         results[thick] = esal
     return results
 
-def compute_total_tf_rigid(vehicles, ldf, ddf):
+def compute_tf_rigid(vehicles: dict, Pt: float) -> dict:
+    """Weighted average Truck Factor per slab thickness."""
     results = {}
+    total_veh = sum(v for v in vehicles.values() if v > 0)
     for thick in SLAB_THICKNESSES:
-        total_tf = 0.0
-        total_veh = sum(v for v in vehicles.values() if v > 0)
-        for vtype, count in vehicles.items():
-            if count <= 0:
-                continue
-            tf = RIGID_TF[vtype]["tf"][thick]
-            total_tf += count * tf
-        # Weighted average truck factor
-        results[thick] = total_tf / total_veh if total_veh > 0 else 0
+        total_tf = sum(
+            count * truck_factor_rigid(vtype, thick, Pt)
+            for vtype, count in vehicles.items() if count > 0
+        )
+        results[thick] = total_tf / total_veh if total_veh > 0 else 0.0
     return results
 
-def compute_esal_flexible(vehicles, ldf, ddf):
-    """Compute ESAL for flexible pavement per SN."""
+def compute_esal_flexible(vehicles: dict, ldf: float, ddf: float,
+                          sn_list: list, Pt: float) -> dict:
+    """Compute ESAL for flexible pavement per user-defined SN list."""
     results = {}
-    for sn in SN_VALUES:
+    for sn in sn_list:
         esal = 0.0
         for vtype, count in vehicles.items():
             if count <= 0:
                 continue
-            tf = FLEX_TF[vtype]["tf"][sn]
+            tf = truck_factor_flex(vtype, sn, Pt)
             esal += count * tf * ldf * ddf
         results[sn] = esal
     return results
 
-def compute_total_tf_flexible(vehicles):
+def compute_tf_flexible(vehicles: dict, sn_list: list, Pt: float) -> dict:
+    """Weighted average Truck Factor per SN."""
     results = {}
-    for sn in SN_VALUES:
-        total_tf = 0.0
-        total_veh = sum(v for v in vehicles.values() if v > 0)
-        for vtype, count in vehicles.items():
-            if count <= 0:
-                continue
-            tf = FLEX_TF[vtype]["tf"][sn]
-            total_tf += count * tf
-        results[sn] = total_tf / total_veh if total_veh > 0 else 0
+    total_veh = sum(v for v in vehicles.values() if v > 0)
+    for sn in sn_list:
+        total_tf = sum(
+            count * truck_factor_flex(vtype, sn, Pt)
+            for vtype, count in vehicles.items() if count > 0
+        )
+        results[sn] = total_tf / total_veh if total_veh > 0 else 0.0
     return results
+
 
 def aashto_lef_single(W, pt=2.5, sn_or_d=None, pave_type="flexible"):
     """AASHTO 1993 Load Equivalency Factor via equation (single axle)."""
@@ -512,7 +592,7 @@ with tab1:
     vehicle_order = ["MB", "HB", "MT", "HT", "TR", "STR"]
 
     # Dynamic column widths: [type, single, tandem, tridam, count] + N slab cols
-    _slab_n   = len(SLAB_THICKNESSES)          # 5 now
+    _slab_n   = len(SLAB_THICKNESSES)
     _col_w    = [2, 1.5, 1.5, 1.5, 2] + [1.8] * _slab_n
 
     hdr = st.columns(_col_w)
@@ -526,29 +606,40 @@ with tab1:
 
     for vtype in vehicle_order:
         cols = st.columns(_col_w)
-        tf_data = RIGID_TF[vtype]["tf"]
-        ax = RIGID_TF[vtype]["axles"][0]
+        axles = VEHICLE_AXLES[vtype]
+        # Display axle config summary
+        singles = [(L1,cnt) for L1,L2,cnt in axles if L2==1]
+        tandems = [(L1,cnt) for L1,L2,cnt in axles if L2==2]
+        trimems = [(L1,cnt) for L1,L2,cnt in axles if L2==3]
+        s_str = "+".join(f"{cnt}×{L1}t" for L1,cnt in singles) if singles else "-"
+        t_str = "+".join(f"{cnt}×{L1}t" for L1,cnt in tandems) if tandems else "-"
+        r_str = "+".join(f"{cnt}×{L1}t" for L1,cnt in trimems) if trimems else "-"
 
         cols[0].markdown(f"**{VEHICLE_LABELS[vtype]}**")
-        cols[1].markdown(f"`{ax[0]}×{ax[1]} t`")
-        cols[2].markdown(f"`{ax[2]}×{ax[3]} t`" if ax[2] > 0 else "`-`")
-        cols[3].markdown(f"`{ax[4]}×{ax[5]} t`" if ax[4] > 0 else "`-`")
+        cols[1].markdown(f"`{s_str}`")
+        cols[2].markdown(f"`{t_str}`")
+        cols[3].markdown(f"`{r_str}`")
         count = cols[4].number_input("", min_value=0, value=0, step=10000,
                                       key=f"r_count_{vtype}", label_visibility="collapsed")
         veh_data_r[vtype] = count
+        # EALF computed from AASHTO equation with current Pt
         for i, t in enumerate(SLAB_THICKNESSES):
-            cols[5+i].markdown(f"`{tf_data[t]:.2f}`")
+            ealf_val = truck_factor_rigid(vtype, t, pt_r)
+            cols[5+i].markdown(f"`{ealf_val:.2f}`")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
     if st.button("🔄 คำนวณ ESAL (Rigid)", type="primary", key="calc_rigid"):
-        esal_r = compute_esal_rigid(veh_data_r, ldf_r, ddf_r)
-        tf_r   = compute_total_tf_rigid(veh_data_r, ldf_r, ddf_r)
+        esal_r = compute_esal_rigid(veh_data_r, ldf_r, ddf_r, pt_r)
+        tf_r   = compute_tf_rigid(veh_data_r, pt_r)
         st.session_state["esal_rigid"] = esal_r
 
         st.markdown("---")
-        st.markdown("### 📋 ผลการคำนวณ ESAL – ผิวทางคอนกรีต")
+        st.markdown(f"### 📋 ผลการคำนวณ ESAL – ผิวทางคอนกรีต  `Pt = {pt_r}`")
+        st.markdown(f'<div class="result-info">🧮 EALF คำนวณจากสมการ AASHTO 1993 App.D  |  Pt = <b>{pt_r}</b>  |  Pi = 4.5</div>',
+                    unsafe_allow_html=True)
 
+        # Metric cards
         cols = st.columns(len(SLAB_THICKNESSES))
         for i, t in enumerate(SLAB_THICKNESSES):
             with cols[i]:
@@ -557,16 +648,31 @@ with tab1:
                     <div class="val">{esal_r[t]:,.0f}</div>
                     <div class="lbl">ESAL – Slab {t} cm</div>
                     <div style="margin-top:0.5rem;font-size:0.85rem;color:#2e6da4;">
-                        Total TF = {tf_r[t]:.2f}
+                        Total TF = {tf_r[t]:.3f}
                     </div>
                 </div>""", unsafe_allow_html=True)
 
+        # Summary table
         df_r = pd.DataFrame({
-            "Slab Thickness (cm)": SLAB_THICKNESSES,
+            "Slab (cm)":         SLAB_THICKNESSES,
             "ESAL in Design Lane": [f"{esal_r[t]:,.0f}" for t in SLAB_THICKNESSES],
-            "Total Truck Factor":  [f"{tf_r[t]:.2f}" for t in SLAB_THICKNESSES],
+            "Total Truck Factor":  [f"{tf_r[t]:.3f}"    for t in SLAB_THICKNESSES],
         })
         st.dataframe(df_r, use_container_width=True, hide_index=True)
+
+        # EALF per vehicle breakdown
+        with st.expander("📊 EALF ต่อยานพาหนะ (แยกตาม Slab Thickness)"):
+            veh_active = {v: c for v, c in veh_data_r.items() if c > 0}
+            if veh_active:
+                rows = []
+                for vtype, count in veh_active.items():
+                    row = {"ประเภทรถ": VEHICLE_LABELS[vtype], "จำนวน (คัน)": f"{count:,}"}
+                    for t in SLAB_THICKNESSES:
+                        row[f"EALF {t}cm"] = f"{truck_factor_rigid(vtype, t, pt_r):.3f}"
+                    rows.append(row)
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            else:
+                st.info("ยังไม่มีรถที่กำหนดจำนวน")
 
         st.markdown('<div class="result-info">✅ ค่า ESAL ถูกบันทึกเข้า Session State แล้ว → ใช้ได้ใน Tab Design K Value</div>',
                     unsafe_allow_html=True)
@@ -620,49 +726,40 @@ with tab2:
 
     for vtype in vehicle_order:
         cols2 = st.columns(_col_w2)
-        ax = RIGID_TF[vtype]["axles"][0]
+        axles = VEHICLE_AXLES[vtype]
+        singles = [(L1,cnt) for L1,L2,cnt in axles if L2==1]
+        tandems = [(L1,cnt) for L1,L2,cnt in axles if L2==2]
+        trimems = [(L1,cnt) for L1,L2,cnt in axles if L2==3]
+        s_str = "+".join(f"{cnt}×{L1}t" for L1,cnt in singles) if singles else "-"
+        t_str = "+".join(f"{cnt}×{L1}t" for L1,cnt in tandems) if tandems else "-"
+        r_str = "+".join(f"{cnt}×{L1}t" for L1,cnt in trimems) if trimems else "-"
 
         cols2[0].markdown(f"**{VEHICLE_LABELS[vtype]}**")
-        cols2[1].markdown(f"`{ax[0]}×{ax[1]} t`")
-        cols2[2].markdown(f"`{ax[2]}×{ax[3]} t`" if ax[2] > 0 else "`-`")
-        cols2[3].markdown(f"`{ax[4]}×{ax[5]} t`" if ax[4] > 0 else "`-`")
+        cols2[1].markdown(f"`{s_str}`")
+        cols2[2].markdown(f"`{t_str}`")
+        cols2[3].markdown(f"`{r_str}`")
         count_f = cols2[4].number_input("", min_value=0, value=0, step=10000,
                                          key=f"f_count_{vtype}", label_visibility="collapsed")
         veh_data_f[vtype] = count_f
 
-        # Lookup or interpolate EALF for each user SN
+        # EALF from AASHTO equation with current Pt
         for i, sn in enumerate(user_sn_values):
-            sn_keys = sorted(FLEX_TF[vtype]["tf"].keys())
-            sn_vals_lkp = [FLEX_TF[vtype]["tf"][k] for k in sn_keys]
-            ealf = float(np.interp(sn, sn_keys, sn_vals_lkp))
+            ealf = truck_factor_flex(vtype, sn, pt_f)
             cols2[5+i].markdown(f"`{ealf:.2f}`")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
     if st.button("🔄 คำนวณ ESAL (Flexible)", type="primary", key="calc_flex"):
-        # Compute ESAL for each user-defined SN via interpolation
-        esal_f_custom = {}
-        tf_f_custom   = {}
-        for sn in user_sn_values:
-            esal_sn = 0.0
-            total_tf = 0.0
-            total_veh = sum(v for v in veh_data_f.values() if v > 0)
-            for vtype, count in veh_data_f.items():
-                if count <= 0:
-                    continue
-                sn_keys_lkp = sorted(FLEX_TF[vtype]["tf"].keys())
-                tf_vals_lkp = [FLEX_TF[vtype]["tf"][k] for k in sn_keys_lkp]
-                tf = float(np.interp(sn, sn_keys_lkp, tf_vals_lkp))
-                esal_sn   += count * tf * ldf_f * ddf_f
-                total_tf  += count * tf
-            esal_f_custom[sn] = esal_sn
-            tf_f_custom[sn]   = total_tf / total_veh if total_veh > 0 else 0
+        esal_f_custom = compute_esal_flexible(veh_data_f, ldf_f, ddf_f, user_sn_values, pt_f)
+        tf_f_custom   = compute_tf_flexible(veh_data_f, user_sn_values, pt_f)
 
         st.session_state["esal_flex"]      = esal_f_custom
         st.session_state["user_sn_values"] = user_sn_values
 
         st.markdown("---")
-        st.markdown("### 📋 ผลการคำนวณ ESAL – ผิวทางลาดยาง")
+        st.markdown(f"### 📋 ผลการคำนวณ ESAL – ผิวทางลาดยาง  `Pt = {pt_f}`")
+        st.markdown(f'<div class="result-info">🧮 EALF คำนวณจากสมการ AASHTO 1993 App.D  |  Pt = <b>{pt_f}</b>  |  Pi = 4.2</div>',
+                    unsafe_allow_html=True)
 
         cols = st.columns(len(user_sn_values))
         for i, sn in enumerate(user_sn_values):
@@ -672,16 +769,38 @@ with tab2:
                     <div class="val">{esal_f_custom[sn]:,.0f}</div>
                     <div class="lbl">ESAL – SN {sn}</div>
                     <div style="margin-top:0.5rem;font-size:0.85rem;color:#2e6da4;">
-                        Total TF = {tf_f_custom[sn]:.2f}
+                        Total TF = {tf_f_custom[sn]:.3f}
                     </div>
                 </div>""", unsafe_allow_html=True)
 
         df_f = pd.DataFrame({
-            "Structure Number (SN)": user_sn_values,
-            "ESAL in Design Lane":  [f"{esal_f_custom[sn]:,.0f}" for sn in user_sn_values],
-            "Total Truck Factor":   [f"{tf_f_custom[sn]:.2f}" for sn in user_sn_values],
+            "SN":                  user_sn_values,
+            "ESAL in Design Lane": [f"{esal_f_custom[sn]:,.0f}" for sn in user_sn_values],
+            "Total Truck Factor":  [f"{tf_f_custom[sn]:.3f}"    for sn in user_sn_values],
         })
         st.dataframe(df_f, use_container_width=True, hide_index=True)
+
+        # EALF per vehicle breakdown
+        with st.expander("📊 EALF ต่อยานพาหนะ (แยกตาม SN)"):
+            veh_active_f = {v: c for v, c in veh_data_f.items() if c > 0}
+            if veh_active_f:
+                rows_f = []
+                for vtype, count in veh_active_f.items():
+                    row_f = {"ประเภทรถ": VEHICLE_LABELS[vtype], "จำนวน (คัน)": f"{count:,}"}
+                    for sn in user_sn_values:
+                        row_f[f"EALF SN={sn}"] = f"{truck_factor_flex(vtype, sn, pt_f):.3f}"
+                    rows_f.append(row_f)
+                st.dataframe(pd.DataFrame(rows_f), use_container_width=True, hide_index=True)
+
+                # Pt sensitivity note
+                st.markdown(f"""
+                <div class="result-warn">
+                ⚡ <b>ค่า EALF ข้างต้นคำนวณที่ Pt = {pt_f}</b><br>
+                หากเปลี่ยน Pt → EALF จะเปลี่ยนตาม Gt = log₁₀((4.2−Pt)/2.7)<br>
+                Gt ปัจจุบัน = {math.log10((4.2-pt_f)/2.7):.4f}
+                </div>""", unsafe_allow_html=True)
+            else:
+                st.info("ยังไม่มีรถที่กำหนดจำนวน")
 
         st.markdown('<div class="result-info">✅ ค่า ESAL ถูกบันทึกเข้า Session State แล้ว → ใช้ได้ใน Tab Flexible Design</div>',
                     unsafe_allow_html=True)
