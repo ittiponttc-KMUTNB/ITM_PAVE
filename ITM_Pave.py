@@ -8,7 +8,7 @@
 # ║  TAB 3 │ Flexible Pavement Design                              ║
 # ║  TAB 4 │ K-Value Nomograph (k∞ + Loss of Support)             ║
 # ║  TAB 5 │ Rigid Design (JPCP / JRCP / CRCP)                    ║
-# ║  TAB 6 │ Report & Save (Word + JSON)                           ║
+# ║  TAB 6 │ Report & Save (Word + JSON)          ปรับปรุง ครั้งที่ 1                 ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 # ─────────────────────────────────────────────
