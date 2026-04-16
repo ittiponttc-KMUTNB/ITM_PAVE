@@ -8,7 +8,7 @@
 # ║  TAB 3 │ Flexible Pavement Design                              ║
 # ║  TAB 4 │ K-Value Nomograph (k∞ + Loss of Support)             ║
 # ║  TAB 5 │ Rigid Design (JPCP / JRCP / CRCP)                    ║
-# ║  TAB 6 │ Report & Save (Word + JSON)                           ║
+# ║  TAB 6 │ Report & Save (Word + JSON)          ปรับปรุง ครั้งที่ 1                 ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 # ─────────────────────────────────────────────
@@ -228,22 +228,28 @@ FLEX_LAYER_MATERIALS = {
     "Sand Embankment CBR 10%":                    (0.08, 1.0),
 }
 
-# RIGID_MATERIALS: Library วัสดุโครงสร้างคอนกรีต
-# รวม e_mpa และ e_psi ไว้ใน dict เดียว ไม่ต้อง sync 2 dict
-RIGID_MATERIALS = {
-    "AC Interlayer":                        {"e_mpa": 2500, "e_psi": 362500},
-    "Cement Treated Base UCS 40 ksc":       {"e_mpa": 1200, "e_psi": 174000},
-    "MOD. Crushed Rock Base UCS 24.5 ksc":  {"e_mpa":  850, "e_psi": 123250},
-    "Soil Cement UCS 17.5 ksc":             {"e_mpa":  350, "e_psi":  50750},
-    "Crushed Rock Base CBR 80%":            {"e_mpa":  350, "e_psi":  50750},
-    "Soil Aggregate Subbase CBR 25%":       {"e_mpa":  150, "e_psi":  21750},
-    "Embankment":                           {"e_mpa":  100, "e_psi":  14500},
+RIGID_LAYER_MATERIALS = {
+    "None":                                       None,
+    "AC Interlayer":                              2500,
+    "Lean Concrete Base (LCB)":                  5000,
+    "Cement Treated Base UCS 24.5 ksc":          1200,
+    "Cement Treated Base UCS 17.5 ksc":           850,
+    "Crushed Rock Base CBR 80%":                  350,
+    "Soil Aggregate Subbase CBR 25%":             150,
+    "Embankment":                                 100,
 }
-RIGID_MAT_NAMES = ["None"] + list(RIGID_MATERIALS.keys())  # รวม None สำหรับ dropdown
 
-# backward compat — ยังคงใช้ใน flexible design
-RIGID_LAYER_MATERIALS  = {"None": None, **{k: v["e_mpa"] for k, v in RIGID_MATERIALS.items()}}
-RIGID_LAYER_E_DEFAULT  = {"None": 0,    **{k: v["e_mpa"] for k, v in RIGID_MATERIALS.items()}}
+# E_MPa default ต่อวัสดุ (สำหรับ auto-fill Layer Editor)
+RIGID_LAYER_E_DEFAULT = {
+    "None":                                       0,
+    "AC Interlayer":                              2500,
+    "Lean Concrete Base (LCB)":                  5000,
+    "Cement Treated Base UCS 24.5 ksc":          1200,
+    "Cement Treated Base UCS 17.5 ksc":           850,
+    "Crushed Rock Base CBR 80%":                  350,
+    "Soil Aggregate Subbase CBR 25%":             150,
+    "Embankment":                                 100,
+}
 
 SAMPLE_CBR = [14.8,14.37,5.31,17.37,5.48,18.46,4.85,6.23,
               5.02,10.78,10.52,14,15.5,8.7,12.93,8.19,
@@ -1634,406 +1640,339 @@ with tab4:
             st.markdown('</div>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════
-#  TAB 5: RIGID DESIGN — Clean Rewrite
-#  หลักการ: กรอกครั้งเดียว คำนวณ JPCP/JRCP/CRCP ทุก Slab พร้อมกัน
+#  TAB 5: RIGID DESIGN (JPCP / JRCP / CRCP)
 # ══════════════════════════════════════════════
 with tab5:
     st.markdown("### 🏗️ Rigid Pavement Design — AASHTO 1993")
 
     # ── Status bar ──
-    sc1, sc2, sc3 = st.columns(3)
-    with sc1: st.markdown(status_badge('esal_rigid','ESAL Rigid'), unsafe_allow_html=True)
-    with sc2: st.markdown(status_badge('k_corrected','k_eff'), unsafe_allow_html=True)
-    with sc3: st.markdown(status_badge('cbr_design','CBR/Mr'), unsafe_allow_html=True)
+    col_s1, col_s2, col_s3 = st.columns(3)
+    with col_s1:
+        st.markdown(status_badge('esal_rigid', 'ESAL Rigid'), unsafe_allow_html=True)
+    with col_s2:
+        st.markdown(status_badge('k_corrected', 'k_eff'), unsafe_allow_html=True)
+    with col_s3:
+        st.markdown(status_badge('cbr_design', 'CBR/Mr'), unsafe_allow_html=True)
+
     st.markdown("---")
 
-    # ════════════════════════════════════════
-    #  SECTION A: ชั้นโครงสร้าง (data_editor)
-    # ════════════════════════════════════════
-    st.markdown('<div class="card"><h4>🔩 ชั้นโครงสร้างทาง (ใช้ร่วมกัน JPCP / JRCP / CRCP)</h4>', unsafe_allow_html=True)
-
-    # สร้าง default layer data ครั้งแรก
-    if 'rigid_layer_df' not in ss:
-        ss['rigid_layer_df'] = pd.DataFrame([
-            {"วัสดุ": "Crushed Rock Base CBR 80%",       "หนา (cm)": 20, "E (MPa)": 350},
-            {"วัสดุ": "Soil Aggregate Subbase CBR 25%",  "หนา (cm)": 15, "E (MPa)": 150},
-            {"วัสดุ": "None",                             "หนา (cm)":  0, "E (MPa)":   0},
-            {"วัสดุ": "None",                             "หนา (cm)":  0, "E (MPa)":   0},
-            {"วัสดุ": "None",                             "หนา (cm)":  0, "E (MPa)":   0},
-        ])
-
-    edited_df = st.data_editor(
-        ss['rigid_layer_df'],
-        column_config={
-            "วัสดุ": st.column_config.SelectboxColumn(
-                "วัสดุ", width="large",
-                options=RIGID_MAT_NAMES, required=True
-            ),
-            "หนา (cm)": st.column_config.NumberColumn(
-                "หนา (cm)", min_value=0, max_value=200, step=1, width="small"
-            ),
-            "E (MPa)": st.column_config.NumberColumn(
-                "E (MPa)", min_value=0, max_value=10000, step=50, width="small",
-                help="Auto-fill จาก Library — แก้ไขได้"
-            ),
-        },
-        use_container_width=True,
-        hide_index=True,
-        num_rows="fixed",
-        key="rigid_layer_editor"
-    )
-
-    # Auto-fill E_MPa เมื่อเปลี่ยนวัสดุ
-    df_updated = edited_df.copy()
-    for i, row in df_updated.iterrows():
-        mat = row["วัสดุ"]
-        # ถ้า E ยังเป็น 0 หรือ material เพิ่งเปลี่ยน → auto-fill จาก library
-        if mat != "None" and mat in RIGID_MATERIALS:
-            lib_e = RIGID_MATERIALS[mat]["e_mpa"]
-            # auto-fill เฉพาะเมื่อ E=0 (ยังไม่ได้กรอก)
-            if row["E (MPa)"] == 0:
-                df_updated.at[i, "E (MPa)"] = lib_e
-    ss['rigid_layer_df'] = df_updated
-
-    # คำนวณ E_eq และ DSB จากชั้นทางที่กรอก
-    valid_layers = df_updated[
-        (df_updated["วัสดุ"] != "None") &
-        (df_updated["หนา (cm)"] > 0) &
-        (df_updated["E (MPa)"] > 0)
-    ].copy()
-
-    if len(valid_layers) > 0:
-        total_h_cm   = valid_layers["หนา (cm)"].sum()
-        dsb_in       = total_h_cm / 2.54
-        sum_h_e_cbrt = (valid_layers["หนา (cm)"] *
-                        valid_layers["E (MPa)"].apply(lambda e: e**(1/3))).sum()
-        e_eq_mpa     = (sum_h_e_cbrt / total_h_cm) ** 3
-        e_eq_psi     = e_eq_mpa * 145.038
-        # ส่งไป K-Value Tab
-        ss['nomo_esb'] = int(e_eq_psi)
-        ss['nomo_dsb'] = round(dsb_in, 2)
-
-        ca, cb, cc, cd_ = st.columns(4)
-        with ca:
-            st.markdown(f"""<div class="metric-box">
-                <div class="val">{total_h_cm:.0f}</div>
-                <div class="lbl">รวมหนา (cm)</div>
-            </div>""", unsafe_allow_html=True)
-        with cb:
-            st.markdown(f"""<div class="metric-box">
-                <div class="val">{dsb_in:.1f}</div>
-                <div class="lbl">DSB (in)</div>
-            </div>""", unsafe_allow_html=True)
-        with cc:
-            st.markdown(f"""<div class="metric-box">
-                <div class="val">{e_eq_psi:,.0f}</div>
-                <div class="lbl">E_eq (psi)</div>
-            </div>""", unsafe_allow_html=True)
-        with cd_:
-            st.markdown(f"""<div class="metric-box">
-                <div class="val">{e_eq_mpa:.1f}</div>
-                <div class="lbl">E_eq (MPa)</div>
-            </div>""", unsafe_allow_html=True)
-        st.markdown(
-            '<div class="result-info" style="font-size:0.85rem;">'
-            f'📐 ส่งค่าไป Tab K-Value อัตโนมัติ: '
-            f'ESB = <b>{e_eq_psi:,.0f} psi</b> | DSB = <b>{dsb_in:.1f} in</b>'
-            '</div>', unsafe_allow_html=True
-        )
-    else:
-        e_eq_psi = 0.0; dsb_in = 0.0
-        st.markdown('<div class="result-warn">กรุณากรอกชั้นทางอย่างน้อย 1 ชั้น</div>',
-                    unsafe_allow_html=True)
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # ════════════════════════════════════════
-    #  SECTION B: พารามิเตอร์ร่วม
-    # ════════════════════════════════════════
-    st.markdown('<div class="card"><h4>⚙️ พารามิเตอร์ออกแบบ</h4>', unsafe_allow_html=True)
-
-    bp1, bp2, bp3, bp4, bp5, bp6 = st.columns(6)
-    with bp1:
-        fc_cube = st.number_input("f'c (ksc)", value=350, step=10, min_value=200, key="r5_fc")
+    # ── Shared design parameters ──
+    st.markdown('<div class="card"><h4>⚙️ พารามิเตอร์ร่วม (ใช้กับทุก Type)</h4>', unsafe_allow_html=True)
+    rp1, rp2, rp3, rp4, rp5, rp6 = st.columns(6)
+    with rp1:
+        fc_cube = st.number_input("f'c (ksc)", value=350, step=10, min_value=200, key="fc_cube")
+    with rp2:
         fc_cyl  = 0.8 * fc_cube
         fc_psi  = fc_cyl * 14.223
         ec_psi  = 57000 * math.sqrt(fc_psi)
         sc_auto = min(600, 10.0 * math.sqrt(fc_psi))
-    with bp2:
-        sc_inp = st.number_input("Sc (psi)", value=int(sc_auto),
-                                  step=10, min_value=100, max_value=700, key="r5_sc")
-    with bp3:
-        r0_rig = st.selectbox("Reliability (%)", list(ZR_MAP.keys()),
-                               index=10, key="r5_r0")
+        sc_inp  = st.number_input("Sc (psi)", value=int(sc_auto), step=10,
+                                  min_value=100, max_value=700, key="sc_inp")
+    with rp3:
+        r0_rig = st.selectbox("Reliability R0 (%)", list(ZR_MAP.keys()),
+                               index=10, key="r0_rig")
         zr_rig = ZR_MAP[r0_rig]
-    with bp4:
+    with rp4:
         so_rig = st.number_input("So", value=0.35, step=0.01,
-                                  min_value=0.2, max_value=0.5, key="r5_so")
-    with bp5:
-        pi_rig = st.number_input("Pi", value=4.5, step=0.1, key="r5_pi")
-    with bp6:
-        pt_rig = st.number_input("Pt", value=2.5, step=0.1, key="r5_pt")
+                                 min_value=0.2, max_value=0.5, key="so_rig")
+    with rp5:
+        pi_rig = st.number_input("Pi", value=4.5, step=0.1, key="pi_rig")
+    with rp6:
+        pt_rig2 = st.number_input("Pt", value=2.5, step=0.1, key="pt_rig2")
 
     st.markdown(
         f"Ec = **{ec_psi:,.0f} psi** &nbsp;|&nbsp; "
-        f"f'c cyl = **{fc_cyl:.0f} ksc** &nbsp;|&nbsp; ZR = **{zr_rig}**"
+        f"f'c cylinder = **{fc_cyl:.0f} ksc** &nbsp;|&nbsp; "
+        f"ZR = **{zr_rig}**"
     )
-
-    bp7, bp8, bp9 = st.columns(3)
-    with bp7:
-        cd_val = st.number_input("Cd (Drainage)", value=1.0, step=0.05,
-                                  min_value=0.5, max_value=1.25, key="r5_cd")
-    with bp8:
-        j_jpcp_jrcp = st.number_input("J – JPCP / JRCP", value=2.8,
-                                       step=0.1, min_value=1.0, max_value=5.0,
-                                       key="r5_j_jr")
-    with bp9:
-        j_crcp = st.number_input("J – CRCP", value=2.6,
-                                  step=0.1, min_value=1.0, max_value=5.0,
-                                  key="r5_j_crcp")
-
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── ESAL และ k_eff ──
-    st.markdown('<div class="card"><h4>📊 Design ESAL & k_eff</h4>', unsafe_allow_html=True)
-    ep1, ep2 = st.columns(2)
+    # ── Sub-tabs JPCP / JRCP / CRCP ──
+    sub_jpcp, sub_jrcp, sub_crcp = st.tabs(["🟦 JPCP", "🟧 JRCP", "🟥 CRCP"])
 
-    with ep1:
-        # ESAL: ดึงจาก Tab 1 — ใช้ค่า ESAL ที่ slab 30 cm เป็น representative
-        # (ESAL แตกต่างกันน้อยมากระหว่าง slab)
-        _esal_vals = list(ss.esal_rigid.values()) if ss.esal_rigid else []
-        _esal_rep  = int(sum(_esal_vals)/len(_esal_vals)) if _esal_vals else 0
-        if _esal_rep > 0:
-            st.markdown(
-                f'<div class="badge-ready">📊 ESAL จาก Tab 1 (ค่าเฉลี่ย) = {_esal_rep:,}</div>',
-                unsafe_allow_html=True
-            )
-        else:
-            st.markdown(
-                '<div class="badge-wait">⚠️ ยังไม่มี ESAL — คำนวณใน Tab 1 ก่อน</div>',
-                unsafe_allow_html=True
-            )
-        # อัปเดต session เมื่อ ESAL ใหม่มาถึง
-        if _esal_rep > 0 and ss.get('_r5_esal_prev') != _esal_rep:
-            ss['_r5_esal_prev'] = _esal_rep
-            ss['r5_esal']       = _esal_rep
-        design_esal = st.number_input(
-            "Design ESAL — แก้ไขได้",
-            value=ss.get('r5_esal', _esal_rep),
-            step=100000, min_value=0, key="r5_esal"
-        )
-
-    with ep2:
-        _k_auto = float(ss.k_corrected) if ss.k_corrected else 0.0
-        if _k_auto > 0:
-            st.markdown(
-                f'<div class="badge-ready">📐 k_eff จาก Tab K-Value = {_k_auto:.0f} pci</div>',
-                unsafe_allow_html=True
-            )
-        else:
-            st.markdown(
-                '<div class="badge-wait">⚠️ ยังไม่มี k_eff — คำนวณใน Tab K-Value ก่อน</div>',
-                unsafe_allow_html=True
-            )
-        if _k_auto > 0 and ss.get('_r5_k_prev') != _k_auto:
-            ss['_r5_k_prev'] = _k_auto
-            ss['r5_keff']    = _k_auto
-        k_eff_val = st.number_input(
-            "k_eff (pci) — แก้ไขได้",
-            value=ss.get('r5_keff', _k_auto if _k_auto > 0 else 200.0),
-            step=10.0, min_value=10.0, key="r5_keff"
-        )
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # ════════════════════════════════════════
-    #  SECTION C: คำนวณทุก Slab × ทุก Type
-    # ════════════════════════════════════════
-    if st.button("✅ คำนวณทั้งหมด (JPCP / JRCP / CRCP × ทุก Slab)",
-                  type="primary", use_container_width=True, key="r5_calc"):
-
-        if design_esal <= 0:
-            st.warning("⚠️ กรุณาใส่ Design ESAL ก่อนคำนวณ")
-        elif k_eff_val <= 0:
-            st.warning("⚠️ กรุณาใส่ k_eff ก่อนคำนวณ")
-        else:
-            # คำนวณ W18 capacity ทุก combination
-            PTYPES = {
-                "JPCP": j_jpcp_jrcp,
-                "JRCP": j_jpcp_jrcp,
-                "CRCP": j_crcp,
-            }
-            results = {}
-            for D in SLAB_THICKNESSES:
-                results[D] = {}
-                for ptype, j_val in PTYPES.items():
-                    w18_cap = aashto_rigid_w18(
-                        D, pi_rig, pt_rig, zr_rig, so_rig,
-                        sc_inp, cd_val, j_val, ec_psi, k_eff_val
-                    )
-                    passed = (w18_cap is not None) and (w18_cap >= design_esal)
-                    results[D][ptype] = {
-                        "w18_cap": w18_cap or 0,
-                        "pass":    passed,
-                        "j":       j_val,
-                    }
-
-            # หา min slab ที่ PASS แต่ละ type
-            min_slab = {}
-            for ptype in PTYPES:
-                passed_d = [D for D in SLAB_THICKNESSES if results[D][ptype]["pass"]]
-                min_slab[ptype] = min(passed_d) if passed_d else None
-
-            # หา type ที่ประหยัดสุด (min slab น้อยสุด)
-            valid_mins = {pt: v for pt, v in min_slab.items() if v is not None}
-            best_type  = min(valid_mins, key=lambda pt: valid_mins[pt]) if valid_mins else None
-            best_d     = valid_mins[best_type] if best_type else None
-
-            # บันทึกผล
-            ss.rigid_results = {
-                "results":    results,
-                "min_slab":   min_slab,
-                "best_type":  best_type,
-                "best_d":     best_d,
-                "design_esal":design_esal,
-                "k_eff":      k_eff_val,
-                "fc":         fc_cube,
-                "sc":         sc_inp,
-                "j_jpcp_jrcp":j_jpcp_jrcp,
-                "j_crcp":     j_crcp,
-                "cd":         cd_val,
-                "ec_psi":     ec_psi,
-                "layers":     valid_layers.to_dict("records") if len(valid_layers) > 0 else [],
-                "e_eq_psi":   e_eq_psi,
-                "dsb_in":     dsb_in,
-            }
-            st.rerun()
-
-    # ════════════════════════════════════════
-    #  SECTION D: แสดงผลตารางเปรียบเทียบ
-    # ════════════════════════════════════════
-    res_data = ss.get("rigid_results", {})
-    if res_data and "results" in res_data:
-        results     = res_data["results"]
-        min_slab    = res_data["min_slab"]
-        best_type   = res_data["best_type"]
-        best_d      = res_data["best_d"]
-        design_esal = res_data["design_esal"]
-        k_eff_show  = res_data["k_eff"]
-
-        st.markdown("---")
-        st.markdown("#### 📊 ผลการออกแบบเปรียบเทียบ JPCP / JRCP / CRCP")
-        st.markdown(
-            f'<div class="result-info">'
-            f'W18 Required = <b>{design_esal:,.0f}</b> &nbsp;|&nbsp; '
-            f'k_eff = <b>{k_eff_show:.0f} pci</b>'
-            f'</div>', unsafe_allow_html=True
-        )
-
-        # ── สร้างตาราง HTML ──
-        PTYPE_COLORS = {"JPCP": "#1565C0", "JRCP": "#E65100", "CRCP": "#B71C1C"}
-
-        html_rows = ""
-        for D, lbl in zip(SLAB_THICKNESSES, SLAB_LABELS):
-            row_html = f'<tr><td style="font-weight:600;padding:6px 10px;">{lbl}</td>'
-            for ptype in ["JPCP", "JRCP", "CRCP"]:
-                r        = results[D][ptype]
-                w18_cap  = r["w18_cap"]
-                passed   = r["pass"]
-                is_min   = (min_slab.get(ptype) == D)
-                is_best  = (best_type == ptype and best_d == D)
-
-                # สี background
-                if passed and is_min:
-                    bg = "#C8E6C9"  # เขียวเข้ม = ★ min
-                elif passed:
-                    bg = "#F1F8E9"  # เขียวอ่อน = pass แต่ไม่ min
-                else:
-                    bg = "#FFEBEE"  # แดง = fail
-
-                # border พิเศษสำหรับ best type
-                border = "3px solid #FFD600" if is_best else "1px solid #E0E0E0"
-
-                icon   = "★ " if is_min else ""
-                trophy = " 🏆" if is_best else ""
-                status = "PASS" if passed else "FAIL"
-                w18_str= f"{w18_cap/1e6:.2f}M" if w18_cap > 0 else "—"
-                color  = "#1B5E20" if passed else "#B71C1C"
-
-                row_html += (
-                    f'<td style="background:{bg};border:{border};padding:6px 10px;'
-                    f'text-align:center;color:{color};font-weight:{"700" if is_min else "400"};">'
-                    f'{icon}{status}{trophy}<br>'
-                    f'<small style="color:#555;">{w18_str}</small>'
-                    f'</td>'
-                )
-            html_rows += row_html + "</tr>"
-
-        html_table = f"""
-        <table style="width:100%;border-collapse:collapse;border-radius:8px;overflow:hidden;
-                      font-family:'Sarabun',sans-serif;font-size:0.9rem;margin-top:0.5rem;">
-            <thead>
-                <tr style="background:#1B5E20;color:white;">
-                    <th style="padding:8px 10px;text-align:left;">Slab Thickness</th>
-                    <th style="padding:8px 10px;text-align:center;color:#90CAF9;">
-                        🟦 JPCP<br><small>J = {res_data['j_jpcp_jrcp']}</small></th>
-                    <th style="padding:8px 10px;text-align:center;color:#FFCC80;">
-                        🟧 JRCP<br><small>J = {res_data['j_jpcp_jrcp']}</small></th>
-                    <th style="padding:8px 10px;text-align:center;color:#EF9A9A;">
-                        🟥 CRCP<br><small>J = {res_data['j_crcp']}</small></th>
-                </tr>
-            </thead>
-            <tbody>{html_rows}</tbody>
-        </table>
-        <div style="font-size:0.78rem;color:#555;margin-top:0.3rem;">
-            ★ = ความหนาน้อยสุดที่ PASS (Design Thickness) &nbsp;|&nbsp;
-            🏆 = ประหยัดที่สุดในทั้ง 3 แบบ &nbsp;|&nbsp;
-            W18 = Capacity (ล้าน)
-        </div>
+    def rigid_design_panel(ptype, tab_key):
         """
-        st.markdown(html_table, unsafe_allow_html=True)
+        Panel ออกแบบ Rigid Pavement แต่ละประเภท
+        - Layer editor: วัสดุ + หนา + E_MPa (auto-fill แก้ไขได้)
+        - คำนวณ E_eq, DSB → ส่งไป session state (Tab K-Value ดึงได้)
+        - ดึง ESAL, k_eff อัตโนมัติ แก้ไขได้
+        """
+        j_default  = J_VALUES[ptype]
+        mat_opts   = list(RIGID_LAYER_MATERIALS.keys())
 
-        # ── Summary: Design Thickness ──
-        st.markdown("#### 🎯 ความหนาออกแบบที่เลือกใช้")
-        s1, s2, s3 = st.columns(3)
-        ptype_cols = {"JPCP": s1, "JRCP": s2, "CRCP": s3}
-        ptype_icons= {"JPCP": "🟦", "JRCP": "🟧", "CRCP": "🟥"}
+        col_rd_l, col_rd_r = st.columns([1.1, 1])
 
-        for ptype, col in ptype_cols.items():
-            with col:
-                d_min = min_slab.get(ptype)
-                if d_min is not None:
-                    lbl_min = SLAB_LABELS[SLAB_THICKNESSES.index(d_min)]
-                    w18_c   = results[d_min][ptype]["w18_cap"]
-                    margin  = (w18_c / design_esal - 1) * 100
-                    trophy  = " 🏆" if (best_type == ptype) else ""
-                    st.markdown(f"""<div class="metric-box" style="border-color:{'#FFD600' if best_type==ptype else '#C8E6C9'};">
-                        <div style="font-size:1.1rem;">{ptype_icons[ptype]} {ptype}{trophy}</div>
-                        <div class="val" style="font-size:1.4rem;">{lbl_min}</div>
-                        <div class="lbl">W18 Cap = {w18_c:,.0f}</div>
-                        <div class="lbl" style="color:#2E7D32;">Safety = {margin:+.1f}%</div>
-                    </div>""", unsafe_allow_html=True)
-                else:
-                    st.markdown(f"""<div class="metric-box" style="border-color:#EF9A9A;">
-                        <div style="font-size:1.1rem;">{ptype_icons[ptype]} {ptype}</div>
-                        <div class="val" style="color:#B71C1C;font-size:1rem;">ไม่มี Slab ที่ผ่าน</div>
-                        <div class="lbl">พิจารณาเพิ่ม k_eff หรือ f'c</div>
-                    </div>""", unsafe_allow_html=True)
+        # ════════════════════════════════
+        #  คอลัมน์ซ้าย — Layer Editor
+        # ════════════════════════════════
+        with col_rd_l:
+            st.markdown(
+                f'<div class="card"><h4>🔩 ชั้นโครงสร้าง – {ptype}</h4>',
+                unsafe_allow_html=True
+            )
 
-        # ── ตารางชั้นทาง ──
-        if res_data.get("layers"):
-            with st.expander("📋 ชั้นโครงสร้างทาง", expanded=False):
-                df_show = pd.DataFrame(res_data["layers"])
-                st.dataframe(df_show, use_container_width=True, hide_index=True)
-                if res_data.get("e_eq_psi", 0) > 0:
-                    st.markdown(
-                        f'<div class="result-info">'
-                        f'E_equivalent = <b>{res_data["e_eq_psi"]:,.0f} psi</b> '
-                        f'({res_data["e_eq_psi"]/145.038:.1f} MPa) &nbsp;|&nbsp; '
-                        f'DSB = <b>{res_data["dsb_in"]:.1f} in</b>'
-                        f'</div>', unsafe_allow_html=True
+            # Header row
+            h0, h1, h2, h3 = st.columns([3, 1.2, 1.5, 0.5])
+            h0.markdown("**วัสดุ**")
+            h1.markdown("**หนา (cm)**")
+            h2.markdown("**E (MPa)**")
+            h3.markdown("")
+
+            layer_r    = []
+            total_h_cm = 0.0
+            e_eq_psi   = 0.0
+
+            for li in range(5):
+                lc_a, lc_b, lc_c, lc_d = st.columns([3, 1.2, 1.5, 0.5])
+
+                with lc_a:
+                    mat_r = st.selectbox(
+                        f"ชั้น {li+1}", mat_opts,
+                        key=f"rmat_{tab_key}_{li}",
+                        label_visibility="collapsed"
                     )
+                with lc_b:
+                    h_r = st.number_input(
+                        "cm", value=0, step=1, min_value=0,
+                        key=f"rh_{tab_key}_{li}",
+                        label_visibility="collapsed"
+                    )
+                with lc_c:
+                    # Auto-fill E_MPa: ติดตาม material ที่เลือก
+                    # ถ้า material เปลี่ยน → อัปเดต session state ทันที
+                    prev_mat_key = f"_prev_mat_{tab_key}_{li}"
+                    e_key        = f"re_{tab_key}_{li}"
+                    e_default    = RIGID_LAYER_E_DEFAULT.get(mat_r, 100) if mat_r != "None" else 0
+                    if ss.get(prev_mat_key) != mat_r:
+                        ss[prev_mat_key] = mat_r
+                        ss[e_key]        = e_default
+                    e_mpa = st.number_input(
+                        "MPa", value=ss.get(e_key, e_default),
+                        step=50, min_value=0,
+                        key=e_key,
+                        label_visibility="collapsed",
+                        disabled=(mat_r == "None" or h_r == 0)
+                    )
+                with lc_d:
+                    if mat_r != "None" and h_r > 0:
+                        st.markdown("✅")
 
+                if mat_r != "None" and h_r > 0 and e_mpa > 0:
+                    layer_r.append({
+                        "name": mat_r,
+                        "thickness_cm": h_r,
+                        "E_MPa": e_mpa
+                    })
+                    total_h_cm += h_r
+
+            # ── คำนวณ E_equivalent (Odemark) ──
+            if layer_r:
+                total_valid_cm = sum(l["thickness_cm"] for l in layer_r)
+                sum_h_e_cbrt   = sum(
+                    l["thickness_cm"] * (l["E_MPa"] ** (1/3))
+                    for l in layer_r
+                )
+                e_eq_mpa = (sum_h_e_cbrt / total_valid_cm) ** 3 if total_valid_cm > 0 else 0
+                e_eq_psi = e_eq_mpa * 145.038
+                dsb_in   = total_valid_cm / 2.54
+
+                # ── ส่งค่าไป session state → Tab K-Value ดึงได้ ──
+                ss['nomo_esb'] = int(e_eq_psi)
+                ss['nomo_dsb'] = round(dsb_in, 2)
+
+                st.markdown(f"""
+                <div class="result-info" style="margin-top:0.5rem;font-size:0.88rem;">
+                    📐 รวมชั้นทาง = <b>{total_valid_cm:.0f} cm</b>
+                    ({dsb_in:.1f} in) &nbsp;|&nbsp;
+                    E_eq = <b>{e_eq_psi:,.0f} psi</b>
+                    ({e_eq_mpa:.1f} MPa)<br>
+                    <small>→ ส่งค่าไป Tab K-Value อัตโนมัติ (ESB={e_eq_psi:,.0f} psi, DSB={dsb_in:.1f} in)</small>
+                </div>""", unsafe_allow_html=True)
+            else:
+                st.markdown(
+                    '<div class="result-warn">กรุณากรอกชั้นทางอย่างน้อย 1 ชั้น</div>',
+                    unsafe_allow_html=True
+                )
+
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # ════════════════════════════════
+        #  คอลัมน์ขวา — Parameters + Check
+        # ════════════════════════════════
+        with col_rd_r:
+            st.markdown(
+                f'<div class="card"><h4>⚙️ พารามิเตอร์ – {ptype}</h4>',
+                unsafe_allow_html=True
+            )
+
+            pr1, pr2 = st.columns(2)
+            with pr1:
+                j_val  = st.number_input(
+                    f"J ({ptype})", value=j_default,
+                    step=0.1, min_value=1.0, max_value=5.0,
+                    key=f"j_{tab_key}"
+                )
+                cd_val = st.number_input(
+                    "Cd (Drainage)", value=1.0, step=0.05,
+                    min_value=0.5, max_value=1.25,
+                    key=f"cd_{tab_key}"
+                )
+            with pr2:
+                d_sel = st.selectbox(
+                    "Slab Thickness",
+                    SLAB_THICKNESSES,
+                    index=2,
+                    format_func=lambda d: SLAB_LABELS[SLAB_THICKNESSES.index(d)],
+                    key=f"d_{tab_key}"
+                )
+
+            # ── ESAL: ดึงอัตโนมัติจาก Tab 1 ──
+            # normalize key: ลอง int และ float เพื่อ match key ใน esal_rigid
+            _esal_r = ss.esal_rigid or {}
+            esal_auto = int(_esal_r.get(d_sel,
+                            _esal_r.get(int(d_sel),
+                            _esal_r.get(float(d_sel), 0))))
+            if esal_auto > 0:
+                st.markdown(
+                    f'<div class="badge-ready">📊 ESAL จาก Tab 1 (Slab {d_sel} cm) = {esal_auto:,}</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    '<div class="badge-wait">⚠️ ยังไม่มี ESAL — คำนวณใน Tab 1 ก่อน หรือกรอกเอง</div>',
+                    unsafe_allow_html=True
+                )
+
+            # อัปเดต session state เมื่อ ESAL ใน Tab 1 เปลี่ยน
+            _w18_key     = f"w18_{tab_key}"
+            _esal_key    = f"_prev_esal_{tab_key}_{d_sel}"
+            if esal_auto > 0 and ss.get(_esal_key) != esal_auto:
+                ss[_esal_key] = esal_auto
+                ss[_w18_key]  = esal_auto
+
+            w18_req = st.number_input(
+                "W18 Design (ESAL) — แก้ไขได้",
+                value=ss.get(_w18_key, esal_auto),
+                step=100000, min_value=0,
+                key=_w18_key
+            )
+
+            # ── k_eff: ดึงอัตโนมัติจาก Tab K-Value ──
+            k_eff_auto = float(ss.k_corrected) if ss.k_corrected else 0.0
+            if k_eff_auto > 0:
+                st.markdown(
+                    f'<div class="badge-ready">📐 k_eff จาก Tab K-Value = {k_eff_auto:.0f} pci</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    '<div class="badge-wait">⚠️ ยังไม่มี k_eff — คำนวณใน Tab K-Value ก่อน หรือกรอกเอง</div>',
+                    unsafe_allow_html=True
+                )
+
+            k_eff_inp = st.number_input(
+                "k_eff (pci) — แก้ไขได้",
+                value=k_eff_auto if k_eff_auto > 0 else 200.0,
+                step=10.0, min_value=10.0,
+                key=f"keff_{tab_key}"
+            )
+
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            # ── Design Check ──
+            if st.button(f"✅ Design Check – {ptype}",
+                          type="primary", key=f"dc_{tab_key}"):
+                if w18_req <= 0:
+                    st.warning("⚠️ W18 Design = 0 — กรุณาใส่ ESAL หรือคำนวณใน Tab 1")
+                else:
+                    w18_cap = aashto_rigid_w18(
+                        d_sel, pi_rig, pt_rig2, zr_rig, so_rig,
+                        sc_inp, cd_val, j_val, ec_psi, k_eff_inp
+                    )
+                    if w18_cap is None:
+                        st.error("ไม่สามารถคำนวณได้ — ตรวจสอบพารามิเตอร์")
+                    else:
+                        passed = w18_cap >= w18_req
+                        margin = (w18_cap / w18_req - 1) * 100 if w18_req > 0 else float('inf')
+                        css    = "result-pass" if passed else "result-fail"
+                        chk    = "✅ PASS" if passed else "❌ FAIL"
+
+                        c1, c2, c3 = st.columns(3)
+                        with c1:
+                            st.markdown(f"""<div class="metric-box">
+                                <div class="val">{w18_cap:,.0f}</div>
+                                <div class="lbl">W18 Capacity</div>
+                            </div>""", unsafe_allow_html=True)
+                        with c2:
+                            st.markdown(f"""<div class="metric-box">
+                                <div class="val">{w18_req:,.0f}</div>
+                                <div class="lbl">W18 Required</div>
+                            </div>""", unsafe_allow_html=True)
+                        with c3:
+                            color = '#1B5E20' if passed else '#B71C1C'
+                            st.markdown(f"""<div class="metric-box">
+                                <div class="val" style="color:{color}">{margin:+.1f}%</div>
+                                <div class="lbl">Safety Margin</div>
+                            </div>""", unsafe_allow_html=True)
+
+                        st.markdown(f"""
+                        <div class="{css}" style="margin-top:0.8rem;font-size:1rem;">
+                            <b>{chk}</b><br>
+                            Slab {d_sel} cm &nbsp;|&nbsp;
+                            k_eff = {k_eff_inp:.0f} pci &nbsp;|&nbsp;
+                            J = {j_val} &nbsp;|&nbsp;
+                            Cd = {cd_val}<br>
+                            Ec = {ec_psi:,.0f} psi &nbsp;|&nbsp;
+                            Sc = {sc_inp} psi
+                        </div>""", unsafe_allow_html=True)
+
+                        # ── บันทึกผลลัพธ์ ──
+                        if not isinstance(ss.rigid_results, dict):
+                            ss.rigid_results = {}
+                        ss.rigid_results[ptype] = {
+                            'd_cm':    d_sel,
+                            'k_eff':   k_eff_inp,
+                            'fc':      fc_cube,
+                            'sc':      sc_inp,
+                            'j':       j_val,
+                            'cd':      cd_val,
+                            'w18_cap': w18_cap,
+                            'w18_req': w18_req,
+                            'pass':    passed,
+                            'margin':  margin,
+                            'layers':  layer_r,
+                            'e_eq_psi': e_eq_psi,
+                        }
+
+                        # ── แสดงตารางชั้นทาง ──
+                        if layer_r:
+                            st.markdown("#### 📋 ชั้นโครงสร้างทาง")
+                            df_lr = pd.DataFrame([{
+                                "ชั้น": i+1,
+                                "วัสดุ": l["name"],
+                                "หนา (cm)": l["thickness_cm"],
+                                "E (MPa)": l["E_MPa"],
+                            } for i, l in enumerate(layer_r)])
+                            df_lr["h×E^(1/3)"] = df_lr.apply(
+                                lambda r: f"{r['หนา (cm)'] * r['E (MPa)']**( 1/3):.1f}", axis=1
+                            )
+                            st.dataframe(df_lr, use_container_width=True, hide_index=True)
+
+                            if e_eq_psi > 0:
+                                st.markdown(f"""
+                                <div class="result-info" style="font-size:0.88rem;">
+                                    E_equivalent = <b>{e_eq_psi:,.0f} psi</b>
+                                    ({e_eq_psi/145.038:.1f} MPa) &nbsp;|&nbsp;
+                                    DSB = <b>{total_h_cm/2.54:.1f} in</b>
+                                </div>""", unsafe_allow_html=True)
+
+    # ── เรียก panel แต่ละประเภท ──
+    with sub_jpcp:
+        rigid_design_panel("JPCP", "jpcp")
+    with sub_jrcp:
+        rigid_design_panel("JRCP", "jrcp")
+    with sub_crcp:
+        rigid_design_panel("CRCP", "crcp")
 
 # ══════════════════════════════════════════════
 #  TAB 6: REPORT & SAVE
