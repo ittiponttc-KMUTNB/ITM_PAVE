@@ -58,14 +58,10 @@ except ImportError:
                 a, fa = mid, fm
         return (a + b) / 2.0
 
-try:
-    import openpyxl
-    from openpyxl import load_workbook
-    OPENPYXL_OK = True
-except Exception:
-    OPENPYXL_OK = False
-    openpyxl   = None
-    load_workbook = None
+# openpyxl — required for pd.read_excel (listed in requirements.txt)
+import openpyxl
+from openpyxl import load_workbook
+OPENPYXL_OK = True
 
 try:
     from docx import Document as DocxDoc
