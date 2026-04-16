@@ -60,9 +60,11 @@ except ImportError:
 
 try:
     import openpyxl
+    from openpyxl import load_workbook
     OPENPYXL_OK = True
 except ImportError:
     OPENPYXL_OK = False
+    openpyxl = None
 
 try:
     from docx import Document as DocxDoc
@@ -928,11 +930,13 @@ with tab1:
             input_mode = st.radio("วิธีกรอกข้อมูล", ["📁 Upload Excel", "✏️ กรอกมือ + Growth Rate"], horizontal=True)
 
             if input_mode == "📁 Upload Excel":
+                if not OPENPYXL_OK:
+                    st.error("❌ ไม่พบ openpyxl — ตรวจสอบ requirements.txt ให้มี openpyxl>=3.1.0")
                 uploaded_xl = st.file_uploader("เลือกไฟล์ Excel (.xlsx)", type=['xlsx'])
                 st.caption("รูปแบบ: คอลัมน์ Year, MB, HB, MT, HT, TR, STR")
-                if uploaded_xl:
+                if uploaded_xl and OPENPYXL_OK:
                     try:
-                        df_up = pd.read_excel(uploaded_xl)
+                        df_up = pd.read_excel(uploaded_xl, engine='openpyxl')
                         df_up.columns = [c.strip() for c in df_up.columns]
                         # Normalize column names
                         col_map = {}
@@ -1101,9 +1105,9 @@ with tab2:
         cbr_vals_input = None
         if cbr_mode == "📁 Upload Excel":
             cbr_xl = st.file_uploader("ไฟล์ Excel (คอลัมน์ CBR)", type=['xlsx'], key="cbr_xl")
-            if cbr_xl:
+            if cbr_xl and OPENPYXL_OK:
                 try:
-                    df_cbr = pd.read_excel(cbr_xl)
+                    df_cbr = pd.read_excel(cbr_xl, engine='openpyxl')
                     col_cbr = next((c for c in df_cbr.columns if 'cbr' in c.lower()), df_cbr.columns[0])
                     cbr_vals_input = pd.to_numeric(df_cbr[col_cbr], errors='coerce').dropna().tolist()
                     st.success(f"✅ {len(cbr_vals_input)} ตัวอย่าง")
