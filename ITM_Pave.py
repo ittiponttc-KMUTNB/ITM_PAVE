@@ -200,7 +200,12 @@ VEHICLE_LABELS = {
 }
 VEHICLE_COLS = ["MB", "HB", "MT", "HT", "TR", "STR"]
 
-SLAB_THICKNESSES = [25, 28, 30, 32, 35]
+# SLAB_THICKNESSES: cm ตามมาตรฐานไทย (กรมทางหลวง)
+# แสดงผลพร้อมค่าอ้างอิงนิ้วกลม สำหรับเทียบตาราง AASHTO
+SLAB_THICKNESSES = [25, 28, 30, 32, 35]          # cm (ใช้คำนวณจริง)
+SLAB_LABELS      = ['25 cm (10 in)', '28 cm (11 in)', '30 cm (12 in)',
+                     '32 cm (13 in)', '35 cm (14 in)']  # แสดงใน UI/รายงาน
+SLAB_INCH        = [10, 11, 12, 13, 14]          # reference เท่านั้น
 SN_DEFAULTS      = [6.5, 7.1, 7.5, 8.0]
 
 ZR_MAP = {
@@ -281,30 +286,41 @@ def truck_factor_rigid(vtype, D_cm, Pt):
 
 def compute_esal_from_df(traffic_df, ldf, ddf, Pt, mode="rigid", sn_list=None):
     """
-    traffic_df: DataFrame with columns Year, MB, HB, MT, HT, TR, STR
-    Returns dict: {D_cm: esal} for rigid, {SN: esal} for flexible
+    คำนวณ ESAL จาก traffic DataFrame (AASHTO 1993)
+
+    สูตร: ESAL = Σ_ปี [ AADT(คัน/วัน) × 365 × DDF × LDF × TF ]
+
+    traffic_df : DataFrame คอลัมน์ Year, MB, HB, MT, HT, TR, STR
+                 ค่า = AADT 2 ทิศทาง (คัน/วัน) ต่อปี
+    ldf        : Lane Distribution Factor
+    ddf        : Directional Distribution Factor
+    Pt         : Terminal Serviceability
+    Returns    : {D_cm: esal} for rigid | {SN: esal} for flexible
     """
+    DAYS_PER_YEAR = 365
     if mode == "rigid":
-        keys = SLAB_THICKNESSES
+        keys    = SLAB_THICKNESSES
         results = {k: 0.0 for k in keys}
         for _, row in traffic_df.iterrows():
             for vtype in VEHICLE_COLS:
                 cnt = float(row.get(vtype, 0) or 0)
-                if cnt <= 0: continue
+                if cnt <= 0:
+                    continue
                 for D in keys:
-                    tf = truck_factor_rigid(vtype, D, Pt)
-                    results[D] += cnt * tf * ldf * ddf
+                    tf_val = truck_factor_rigid(vtype, D, Pt)
+                    results[D] += cnt * DAYS_PER_YEAR * ddf * ldf * tf_val
         return results
     else:
-        keys = sn_list or SN_DEFAULTS
+        keys    = sn_list or SN_DEFAULTS
         results = {k: 0.0 for k in keys}
         for _, row in traffic_df.iterrows():
             for vtype in VEHICLE_COLS:
                 cnt = float(row.get(vtype, 0) or 0)
-                if cnt <= 0: continue
+                if cnt <= 0:
+                    continue
                 for SN in keys:
-                    tf = truck_factor_flex(vtype, SN, Pt)
-                    results[SN] += cnt * tf * ldf * ddf
+                    tf_val = truck_factor_flex(vtype, SN, Pt)
+                    results[SN] += cnt * DAYS_PER_YEAR * ddf * ldf * tf_val
         return results
 
 def aashto_sn_required(esal, zr, so, pi, pt, mr_psi):
@@ -616,8 +632,9 @@ def build_report_esal(ss):
 
     if ss.get('esal_rigid'):
         _add_section_heading(doc, "1.1 ESAL – ผิวทางคอนกรีต", level=2)
-        hdr = ["Slab Thickness (cm)", "ESAL (Design Lane)"]
-        rows = [[f"{d} cm", f"{v:,.0f}"] for d,v in ss['esal_rigid'].items()]
+        hdr = ["Slab Thickness", "ESAL (Design Lane)"]
+        rows = [[lbl, f"{ss['esal_rigid'].get(D,0):,.0f}"]
+                for D, lbl in zip(SLAB_THICKNESSES, SLAB_LABELS)]
         _add_simple_table(doc, hdr, rows)
         doc.add_paragraph()
 
@@ -1007,8 +1024,8 @@ with tab1:
         tf_rows = []
         for vt in VEHICLE_COLS:
             row = {"ประเภทรถ": f"{VEHICLE_LABELS[vt]} ({vt})"}
-            for D in SLAB_THICKNESSES:
-                row[f"{D} cm"] = f"{truck_factor_rigid(vt,D,pt_r):.3f}"
+            for D, lbl in zip(SLAB_THICKNESSES, SLAB_LABELS):
+                row[lbl] = f"{truck_factor_rigid(vt,D,pt_r):.3f}"
             tf_rows.append(row)
         st.dataframe(pd.DataFrame(tf_rows), use_container_width=True, hide_index=True)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1024,19 +1041,21 @@ with tab1:
                 st.markdown("---")
                 st.markdown("#### 📊 ผลการคำนวณ ESAL – Rigid Pavement")
                 cols_m = st.columns(len(SLAB_THICKNESSES))
-                for i, D in enumerate(SLAB_THICKNESSES):
+                for i, (D, lbl) in enumerate(zip(SLAB_THICKNESSES, SLAB_LABELS)):
                     with cols_m[i]:
                         st.markdown(f"""
                         <div class="metric-box">
                             <div class="val">{esal_r[D]:,.0f}</div>
-                            <div class="lbl">ESAL – Slab {D} cm</div>
+                            <div class="lbl">ESAL – {lbl}</div>
                         </div>""", unsafe_allow_html=True)
                 st.markdown('<div class="result-info">✅ ค่า ESAL บันทึกแล้ว → ใช้ได้ใน Tab K-Value และ Rigid Design</div>', unsafe_allow_html=True)
 
         if ss.esal_rigid:
             st.markdown("**ค่า ESAL Rigid ปัจจุบัน:**")
-            df_er = pd.DataFrame({"Slab (cm)": list(ss.esal_rigid.keys()),
-                                   "ESAL": [f"{v:,.0f}" for v in ss.esal_rigid.values()]})
+            df_er = pd.DataFrame({
+                "Slab": SLAB_LABELS,
+                "ESAL": [f"{ss.esal_rigid.get(D,0):,.0f}" for D in SLAB_THICKNESSES]
+            })
             st.dataframe(df_er, use_container_width=True, hide_index=True)
 
     # ─── Sub-tab: Flexible ───
@@ -1719,11 +1738,18 @@ with tab5:
                         label_visibility="collapsed"
                     )
                 with lc_c:
-                    # Auto-fill E_MPa จาก material library แก้ไขได้
-                    e_default = RIGID_LAYER_E_DEFAULT.get(mat_r, 100) if mat_r != "None" else 0
+                    # Auto-fill E_MPa: ติดตาม material ที่เลือก
+                    # ถ้า material เปลี่ยน → อัปเดต session state ทันที
+                    prev_mat_key = f"_prev_mat_{tab_key}_{li}"
+                    e_key        = f"re_{tab_key}_{li}"
+                    e_default    = RIGID_LAYER_E_DEFAULT.get(mat_r, 100) if mat_r != "None" else 0
+                    if ss.get(prev_mat_key) != mat_r:
+                        ss[prev_mat_key] = mat_r
+                        ss[e_key]        = e_default
                     e_mpa = st.number_input(
-                        "MPa", value=e_default, step=50, min_value=0,
-                        key=f"re_{tab_key}_{li}",
+                        "MPa", value=ss.get(e_key, e_default),
+                        step=50, min_value=0,
+                        key=e_key,
                         label_visibility="collapsed",
                         disabled=(mat_r == "None" or h_r == 0)
                     )
@@ -1793,13 +1819,19 @@ with tab5:
                 )
             with pr2:
                 d_sel = st.selectbox(
-                    "Slab Thickness (cm)",
-                    SLAB_THICKNESSES, index=1,
+                    "Slab Thickness",
+                    SLAB_THICKNESSES,
+                    index=2,
+                    format_func=lambda d: SLAB_LABELS[SLAB_THICKNESSES.index(d)],
                     key=f"d_{tab_key}"
                 )
 
             # ── ESAL: ดึงอัตโนมัติจาก Tab 1 ──
-            esal_auto = int(ss.esal_rigid.get(d_sel, 0))
+            # normalize key: ลอง int และ float เพื่อ match key ใน esal_rigid
+            _esal_r = ss.esal_rigid or {}
+            esal_auto = int(_esal_r.get(d_sel,
+                            _esal_r.get(int(d_sel),
+                            _esal_r.get(float(d_sel), 0))))
             if esal_auto > 0:
                 st.markdown(
                     f'<div class="badge-ready">📊 ESAL จาก Tab 1 (Slab {d_sel} cm) = {esal_auto:,}</div>',
@@ -1811,10 +1843,18 @@ with tab5:
                     unsafe_allow_html=True
                 )
 
+            # อัปเดต session state เมื่อ ESAL ใน Tab 1 เปลี่ยน
+            _w18_key     = f"w18_{tab_key}"
+            _esal_key    = f"_prev_esal_{tab_key}_{d_sel}"
+            if esal_auto > 0 and ss.get(_esal_key) != esal_auto:
+                ss[_esal_key] = esal_auto
+                ss[_w18_key]  = esal_auto
+
             w18_req = st.number_input(
                 "W18 Design (ESAL) — แก้ไขได้",
-                value=esal_auto, step=100000, min_value=0,
-                key=f"w18_{tab_key}"
+                value=ss.get(_w18_key, esal_auto),
+                step=100000, min_value=0,
+                key=_w18_key
             )
 
             # ── k_eff: ดึงอัตโนมัติจาก Tab K-Value ──
