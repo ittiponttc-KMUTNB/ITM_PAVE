@@ -231,9 +231,19 @@ RIGID_LAYER_MATERIALS = {
     "Cement Treated Base UCS 17.5 ksc":           850,
     "Crushed Rock Base CBR 80%":                  350,
     "Soil Aggregate Subbase CBR 25%":             150,
-    "Soil Aggregate Subbase CBR 20%":             120,
-    "Soil Aggregate Subbase CBR 15%":             100,
-    "Sand Embankment CBR 10%":                    100,
+    "Embankment":                                 100,
+}
+
+# E_MPa default ต่อวัสดุ (สำหรับ auto-fill Layer Editor)
+RIGID_LAYER_E_DEFAULT = {
+    "None":                                       0,
+    "AC Interlayer":                              2500,
+    "Lean Concrete Base (LCB)":                  5000,
+    "Cement Treated Base UCS 24.5 ksc":          1200,
+    "Cement Treated Base UCS 17.5 ksc":           850,
+    "Crushed Rock Base CBR 80%":                  350,
+    "Soil Aggregate Subbase CBR 25%":             150,
+    "Embankment":                                 100,
 }
 
 SAMPLE_CBR = [14.8,14.37,5.31,17.37,5.48,18.46,4.85,6.23,
@@ -1420,10 +1430,22 @@ with tab4:
                 st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown('<div class="card"><h4>📝 บันทึกค่าที่อ่านได้</h4>', unsafe_allow_html=True)
 
-                mr_val  = st.number_input("MR (psi)",        value=int(ss.get('nomo_mr',  int(ss.mr_subgrade_psi) if ss.mr_subgrade_psi else 7000)), step=500,  key="nomo_mr")
-                esb_val = st.number_input("ESB (psi)",       value=int(ss.get('nomo_esb', 50000)), step=1000, key="nomo_esb")
-                dsb_val = st.number_input("DSB (inches)",    value=float(ss.get('nomo_dsb', 6.0)), step=0.5,  key="nomo_dsb")
-                k_inf_read = st.number_input("k∞ ที่อ่านได้ (pci)", value=int(ss.get('nomo_k_inf', 400)), step=10, key="nomo_k_inf")
+                # ── auto-fill จาก session state ──
+                mr_auto_k  = int(ss.mr_subgrade_psi) if ss.mr_subgrade_psi else 7000
+                esb_auto_k = int(ss.get('nomo_esb', 50000))
+                dsb_auto_k = float(ss.get('nomo_dsb', 6.0))
+
+                if ss.mr_subgrade_psi:
+                    st.markdown(f'<div class="badge-ready">📊 MR จาก Tab CBR = {mr_auto_k:,} psi</div>', unsafe_allow_html=True)
+                if ss.get('nomo_esb'):
+                    st.markdown(f'<div class="badge-ready">📐 ESB จาก Rigid Layers = {esb_auto_k:,} psi</div>', unsafe_allow_html=True)
+                if ss.get('nomo_dsb'):
+                    st.markdown(f'<div class="badge-ready">📏 DSB จาก Rigid Layers = {dsb_auto_k:.1f} in</div>', unsafe_allow_html=True)
+
+                mr_val  = st.number_input("MR (psi) — แก้ไขได้",     value=mr_auto_k,  step=500,  key="nomo_mr")
+                esb_val = st.number_input("ESB (psi) — แก้ไขได้",    value=esb_auto_k, step=1000, key="nomo_esb")
+                dsb_val = st.number_input("DSB (inches) — แก้ไขได้", value=dsb_auto_k, step=0.5,  key="nomo_dsb")
+                k_inf_read = st.number_input("k∞ ที่อ่านได้ (pci)",  value=int(ss.get('nomo_k_inf', 400)), step=10, key="nomo_k_inf")
 
                 if st.button("✅ บันทึก k∞", type="primary", key="save_kinf"):
                     ss.k_inf = float(k_inf_read)
@@ -1599,107 +1621,318 @@ with tab4:
             st.markdown('</div>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════
-#  TAB 5: RIGID DESIGN
+#  TAB 5: RIGID DESIGN (JPCP / JRCP / CRCP)
 # ══════════════════════════════════════════════
 with tab5:
     st.markdown("### 🏗️ Rigid Pavement Design — AASHTO 1993")
 
-    # Auto-fill info
-    k_eff_display = ss.k_corrected if ss.k_corrected else 0.0
-    st.markdown(f"""
-    <div class="result-info" style="margin-bottom:1rem;">
-        📐 k_eff (จาก Tab K-Value) = <b>{k_eff_display:.1f} pci</b> &nbsp;|&nbsp;
-        📊 ESAL Rigid พร้อม: {'✅' if ss.esal_rigid else '⚠️ ยังไม่มี'}
-    </div>""", unsafe_allow_html=True)
+    # ── Status bar ──
+    col_s1, col_s2, col_s3 = st.columns(3)
+    with col_s1:
+        st.markdown(status_badge('esal_rigid', 'ESAL Rigid'), unsafe_allow_html=True)
+    with col_s2:
+        st.markdown(status_badge('k_corrected', 'k_eff'), unsafe_allow_html=True)
+    with col_s3:
+        st.markdown(status_badge('cbr_design', 'CBR/Mr'), unsafe_allow_html=True)
 
-    # Shared design parameters
+    st.markdown("---")
+
+    # ── Shared design parameters ──
     st.markdown('<div class="card"><h4>⚙️ พารามิเตอร์ร่วม (ใช้กับทุก Type)</h4>', unsafe_allow_html=True)
-    rp1,rp2,rp3,rp4,rp5,rp6 = st.columns(6)
-    with rp1: fc_cube = st.number_input("f'c (ksc)", value=350, step=10, min_value=200, key="fc_cube")
+    rp1, rp2, rp3, rp4, rp5, rp6 = st.columns(6)
+    with rp1:
+        fc_cube = st.number_input("f'c (ksc)", value=350, step=10, min_value=200, key="fc_cube")
     with rp2:
         fc_cyl  = 0.8 * fc_cube
         fc_psi  = fc_cyl * 14.223
         ec_psi  = 57000 * math.sqrt(fc_psi)
         sc_auto = min(600, 10.0 * math.sqrt(fc_psi))
-        sc_inp  = st.number_input("Sc (psi)", value=int(sc_auto), step=10, min_value=100, max_value=700, key="sc_inp")
+        sc_inp  = st.number_input("Sc (psi)", value=int(sc_auto), step=10,
+                                  min_value=100, max_value=700, key="sc_inp")
     with rp3:
-        r0_rig = st.selectbox("Reliability R0 (%)", list(ZR_MAP.keys()), index=10, key="r0_rig")
+        r0_rig = st.selectbox("Reliability R0 (%)", list(ZR_MAP.keys()),
+                               index=10, key="r0_rig")
         zr_rig = ZR_MAP[r0_rig]
-    with rp4: so_rig = st.number_input("So", value=0.35, step=0.01, min_value=0.2, max_value=0.5, key="so_rig")
-    with rp5: pi_rig = st.number_input("Pi", value=4.5, step=0.1, key="pi_rig")
-    with rp6: pt_rig2= st.number_input("Pt", value=2.5, step=0.1, key="pt_rig2")
-    st.markdown(f"Ec = **{ec_psi:,.0f} psi** | f'c cylinder = **{fc_cyl:.0f} ksc** | ZR = **{zr_rig}**")
+    with rp4:
+        so_rig = st.number_input("So", value=0.35, step=0.01,
+                                 min_value=0.2, max_value=0.5, key="so_rig")
+    with rp5:
+        pi_rig = st.number_input("Pi", value=4.5, step=0.1, key="pi_rig")
+    with rp6:
+        pt_rig2 = st.number_input("Pt", value=2.5, step=0.1, key="pt_rig2")
+
+    st.markdown(
+        f"Ec = **{ec_psi:,.0f} psi** &nbsp;|&nbsp; "
+        f"f'c cylinder = **{fc_cyl:.0f} ksc** &nbsp;|&nbsp; "
+        f"ZR = **{zr_rig}**"
+    )
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # ── Sub-tabs JPCP / JRCP / CRCP ──
     sub_jpcp, sub_jrcp, sub_crcp = st.tabs(["🟦 JPCP", "🟧 JRCP", "🟥 CRCP"])
 
     def rigid_design_panel(ptype, tab_key):
-        j_default = J_VALUES[ptype]
-        cd_default = 1.0
+        """
+        Panel ออกแบบ Rigid Pavement แต่ละประเภท
+        - Layer editor: วัสดุ + หนา + E_MPa (auto-fill แก้ไขได้)
+        - คำนวณ E_eq, DSB → ส่งไป session state (Tab K-Value ดึงได้)
+        - ดึง ESAL, k_eff อัตโนมัติ แก้ไขได้
+        """
+        j_default  = J_VALUES[ptype]
+        mat_opts   = list(RIGID_LAYER_MATERIALS.keys())
 
-        col_rd_l, col_rd_r = st.columns([1, 1])
+        col_rd_l, col_rd_r = st.columns([1.1, 1])
+
+        # ════════════════════════════════
+        #  คอลัมน์ซ้าย — Layer Editor
+        # ════════════════════════════════
         with col_rd_l:
-            st.markdown(f'<div class="card"><h4>🔩 ชั้นโครงสร้าง – {ptype}</h4>', unsafe_allow_html=True)
-            mat_opts_r = list(RIGID_LAYER_MATERIALS.keys())
-            layer_r = []
-            for li in range(4):
-                lc_a, lc_b = st.columns([3, 1])
+            st.markdown(
+                f'<div class="card"><h4>🔩 ชั้นโครงสร้าง – {ptype}</h4>',
+                unsafe_allow_html=True
+            )
+
+            # Header row
+            h0, h1, h2, h3 = st.columns([3, 1.2, 1.5, 0.5])
+            h0.markdown("**วัสดุ**")
+            h1.markdown("**หนา (cm)**")
+            h2.markdown("**E (MPa)**")
+            h3.markdown("")
+
+            layer_r    = []
+            total_h_cm = 0.0
+            e_eq_psi   = 0.0
+
+            for li in range(5):
+                lc_a, lc_b, lc_c, lc_d = st.columns([3, 1.2, 1.5, 0.5])
+
                 with lc_a:
-                    mat_r = st.selectbox(f"ชั้น {li+1}", mat_opts_r, key=f"rmat_{tab_key}_{li}")
+                    mat_r = st.selectbox(
+                        f"ชั้น {li+1}", mat_opts,
+                        key=f"rmat_{tab_key}_{li}",
+                        label_visibility="collapsed"
+                    )
                 with lc_b:
-                    if mat_r != "None":
-                        h_r = st.number_input("cm", value=20, step=1, min_value=1, key=f"rh_{tab_key}_{li}", label_visibility="visible")
-                        layer_r.append((mat_r, h_r, RIGID_LAYER_MATERIALS[mat_r]))
+                    h_r = st.number_input(
+                        "cm", value=0, step=1, min_value=0,
+                        key=f"rh_{tab_key}_{li}",
+                        label_visibility="collapsed"
+                    )
+                with lc_c:
+                    # Auto-fill E_MPa จาก material library แก้ไขได้
+                    e_default = RIGID_LAYER_E_DEFAULT.get(mat_r, 100) if mat_r != "None" else 0
+                    e_mpa = st.number_input(
+                        "MPa", value=e_default, step=50, min_value=0,
+                        key=f"re_{tab_key}_{li}",
+                        label_visibility="collapsed",
+                        disabled=(mat_r == "None" or h_r == 0)
+                    )
+                with lc_d:
+                    if mat_r != "None" and h_r > 0:
+                        st.markdown("✅")
+
+                if mat_r != "None" and h_r > 0 and e_mpa > 0:
+                    layer_r.append({
+                        "name": mat_r,
+                        "thickness_cm": h_r,
+                        "E_MPa": e_mpa
+                    })
+                    total_h_cm += h_r
+
+            # ── คำนวณ E_equivalent (Odemark) ──
+            if layer_r:
+                total_valid_cm = sum(l["thickness_cm"] for l in layer_r)
+                sum_h_e_cbrt   = sum(
+                    l["thickness_cm"] * (l["E_MPa"] ** (1/3))
+                    for l in layer_r
+                )
+                e_eq_mpa = (sum_h_e_cbrt / total_valid_cm) ** 3 if total_valid_cm > 0 else 0
+                e_eq_psi = e_eq_mpa * 145.038
+                dsb_in   = total_valid_cm / 2.54
+
+                # ── ส่งค่าไป session state → Tab K-Value ดึงได้ ──
+                ss['nomo_esb'] = int(e_eq_psi)
+                ss['nomo_dsb'] = round(dsb_in, 2)
+
+                st.markdown(f"""
+                <div class="result-info" style="margin-top:0.5rem;font-size:0.88rem;">
+                    📐 รวมชั้นทาง = <b>{total_valid_cm:.0f} cm</b>
+                    ({dsb_in:.1f} in) &nbsp;|&nbsp;
+                    E_eq = <b>{e_eq_psi:,.0f} psi</b>
+                    ({e_eq_mpa:.1f} MPa)<br>
+                    <small>→ ส่งค่าไป Tab K-Value อัตโนมัติ (ESB={e_eq_psi:,.0f} psi, DSB={dsb_in:.1f} in)</small>
+                </div>""", unsafe_allow_html=True)
+            else:
+                st.markdown(
+                    '<div class="result-warn">กรุณากรอกชั้นทางอย่างน้อย 1 ชั้น</div>',
+                    unsafe_allow_html=True
+                )
+
             st.markdown('</div>', unsafe_allow_html=True)
 
+        # ════════════════════════════════
+        #  คอลัมน์ขวา — Parameters + Check
+        # ════════════════════════════════
         with col_rd_r:
-            st.markdown(f'<div class="card"><h4>⚙️ พารามิเตอร์ – {ptype}</h4>', unsafe_allow_html=True)
-            c1,c2 = st.columns(2)
-            with c1:
-                j_val  = st.number_input(f"J ({ptype})", value=j_default, step=0.1, key=f"j_{tab_key}")
-                cd_val = st.number_input("Cd (Drainage)", value=cd_default, step=0.05, min_value=0.5, max_value=1.25, key=f"cd_{tab_key}")
-            with c2:
-                d_sel  = st.selectbox("Slab Thickness (cm)", SLAB_THICKNESSES, index=1, key=f"d_{tab_key}")
-                # Auto ESAL
-                esal_auto = ss.esal_rigid.get(d_sel, 0)
-                w18_req = st.number_input("W18 Design (ESAL)", value=int(esal_auto), step=100000, min_value=0, key=f"w18_{tab_key}")
+            st.markdown(
+                f'<div class="card"><h4>⚙️ พารามิเตอร์ – {ptype}</h4>',
+                unsafe_allow_html=True
+            )
 
-            # k_eff input
-            k_eff_inp = st.number_input("k_eff (pci) [อัตโนมัติจาก Tab K-Value]",
-                                        value=float(k_eff_display) if k_eff_display > 0 else 200.0,
-                                        step=10.0, min_value=10.0, key=f"keff_{tab_key}")
+            pr1, pr2 = st.columns(2)
+            with pr1:
+                j_val  = st.number_input(
+                    f"J ({ptype})", value=j_default,
+                    step=0.1, min_value=1.0, max_value=5.0,
+                    key=f"j_{tab_key}"
+                )
+                cd_val = st.number_input(
+                    "Cd (Drainage)", value=1.0, step=0.05,
+                    min_value=0.5, max_value=1.25,
+                    key=f"cd_{tab_key}"
+                )
+            with pr2:
+                d_sel = st.selectbox(
+                    "Slab Thickness (cm)",
+                    SLAB_THICKNESSES, index=1,
+                    key=f"d_{tab_key}"
+                )
+
+            # ── ESAL: ดึงอัตโนมัติจาก Tab 1 ──
+            esal_auto = int(ss.esal_rigid.get(d_sel, 0))
+            if esal_auto > 0:
+                st.markdown(
+                    f'<div class="badge-ready">📊 ESAL จาก Tab 1 (Slab {d_sel} cm) = {esal_auto:,}</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    '<div class="badge-wait">⚠️ ยังไม่มี ESAL — คำนวณใน Tab 1 ก่อน หรือกรอกเอง</div>',
+                    unsafe_allow_html=True
+                )
+
+            w18_req = st.number_input(
+                "W18 Design (ESAL) — แก้ไขได้",
+                value=esal_auto, step=100000, min_value=0,
+                key=f"w18_{tab_key}"
+            )
+
+            # ── k_eff: ดึงอัตโนมัติจาก Tab K-Value ──
+            k_eff_auto = float(ss.k_corrected) if ss.k_corrected else 0.0
+            if k_eff_auto > 0:
+                st.markdown(
+                    f'<div class="badge-ready">📐 k_eff จาก Tab K-Value = {k_eff_auto:.0f} pci</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    '<div class="badge-wait">⚠️ ยังไม่มี k_eff — คำนวณใน Tab K-Value ก่อน หรือกรอกเอง</div>',
+                    unsafe_allow_html=True
+                )
+
+            k_eff_inp = st.number_input(
+                "k_eff (pci) — แก้ไขได้",
+                value=k_eff_auto if k_eff_auto > 0 else 200.0,
+                step=10.0, min_value=10.0,
+                key=f"keff_{tab_key}"
+            )
+
             st.markdown('</div>', unsafe_allow_html=True)
 
-            if st.button(f"✅ Design Check – {ptype}", type="primary", key=f"dc_{tab_key}"):
-                w18_cap = aashto_rigid_w18(d_sel, pi_rig, pt_rig2, zr_rig, so_rig,
-                                           sc_inp, cd_val, j_val, ec_psi, k_eff_inp)
-                if w18_cap is None:
-                    st.error("ไม่สามารถคำนวณได้ — ตรวจสอบพารามิเตอร์")
+            # ── Design Check ──
+            if st.button(f"✅ Design Check – {ptype}",
+                          type="primary", key=f"dc_{tab_key}"):
+                if w18_req <= 0:
+                    st.warning("⚠️ W18 Design = 0 — กรุณาใส่ ESAL หรือคำนวณใน Tab 1")
                 else:
-                    passed  = w18_cap >= w18_req
-                    margin  = (w18_cap/w18_req - 1)*100 if w18_req > 0 else float('inf')
-                    css     = "result-pass" if passed else "result-fail"
-                    chk     = "✅ PASS" if passed else "❌ FAIL"
+                    w18_cap = aashto_rigid_w18(
+                        d_sel, pi_rig, pt_rig2, zr_rig, so_rig,
+                        sc_inp, cd_val, j_val, ec_psi, k_eff_inp
+                    )
+                    if w18_cap is None:
+                        st.error("ไม่สามารถคำนวณได้ — ตรวจสอบพารามิเตอร์")
+                    else:
+                        passed = w18_cap >= w18_req
+                        margin = (w18_cap / w18_req - 1) * 100 if w18_req > 0 else float('inf')
+                        css    = "result-pass" if passed else "result-fail"
+                        chk    = "✅ PASS" if passed else "❌ FAIL"
 
-                    c1,c2,c3 = st.columns(3)
-                    with c1: st.markdown(f"""<div class="metric-box"><div class="val">{w18_cap:,.0f}</div><div class="lbl">W18 Capacity</div></div>""", unsafe_allow_html=True)
-                    with c2: st.markdown(f"""<div class="metric-box"><div class="val">{w18_req:,.0f}</div><div class="lbl">W18 Required</div></div>""", unsafe_allow_html=True)
-                    with c3: st.markdown(f"""<div class="metric-box"><div class="val" style="color:{'#1B5E20' if passed else '#B71C1C'}">{margin:+.1f}%</div><div class="lbl">Safety Margin</div></div>""", unsafe_allow_html=True)
+                        c1, c2, c3 = st.columns(3)
+                        with c1:
+                            st.markdown(f"""<div class="metric-box">
+                                <div class="val">{w18_cap:,.0f}</div>
+                                <div class="lbl">W18 Capacity</div>
+                            </div>""", unsafe_allow_html=True)
+                        with c2:
+                            st.markdown(f"""<div class="metric-box">
+                                <div class="val">{w18_req:,.0f}</div>
+                                <div class="lbl">W18 Required</div>
+                            </div>""", unsafe_allow_html=True)
+                        with c3:
+                            color = '#1B5E20' if passed else '#B71C1C'
+                            st.markdown(f"""<div class="metric-box">
+                                <div class="val" style="color:{color}">{margin:+.1f}%</div>
+                                <div class="lbl">Safety Margin</div>
+                            </div>""", unsafe_allow_html=True)
 
-                    st.markdown(f'<div class="{css}" style="margin-top:0.8rem;font-size:1.05rem">{chk}<br>Slab {d_sel} cm | k_eff = {k_eff_inp:.0f} pci | J = {j_val}</div>', unsafe_allow_html=True)
+                        st.markdown(f"""
+                        <div class="{css}" style="margin-top:0.8rem;font-size:1rem;">
+                            <b>{chk}</b><br>
+                            Slab {d_sel} cm &nbsp;|&nbsp;
+                            k_eff = {k_eff_inp:.0f} pci &nbsp;|&nbsp;
+                            J = {j_val} &nbsp;|&nbsp;
+                            Cd = {cd_val}<br>
+                            Ec = {ec_psi:,.0f} psi &nbsp;|&nbsp;
+                            Sc = {sc_inp} psi
+                        </div>""", unsafe_allow_html=True)
 
-                    if 'rigid_results' not in ss or not isinstance(ss.rigid_results, dict):
-                        ss.rigid_results = {}
-                    ss.rigid_results[ptype] = {
-                        'd_cm': d_sel, 'k_eff': k_eff_inp, 'fc': fc_cube,
-                        'sc': sc_inp, 'j': j_val, 'cd': cd_val,
-                        'w18_cap': w18_cap, 'w18_req': w18_req,
-                        'pass': passed, 'margin_pct': margin,
-                    }
+                        # ── บันทึกผลลัพธ์ ──
+                        if not isinstance(ss.rigid_results, dict):
+                            ss.rigid_results = {}
+                        ss.rigid_results[ptype] = {
+                            'd_cm':    d_sel,
+                            'k_eff':   k_eff_inp,
+                            'fc':      fc_cube,
+                            'sc':      sc_inp,
+                            'j':       j_val,
+                            'cd':      cd_val,
+                            'w18_cap': w18_cap,
+                            'w18_req': w18_req,
+                            'pass':    passed,
+                            'margin':  margin,
+                            'layers':  layer_r,
+                            'e_eq_psi': e_eq_psi,
+                        }
 
-    with sub_jpcp: rigid_design_panel("JPCP", "jpcp")
-    with sub_jrcp: rigid_design_panel("JRCP", "jrcp")
-    with sub_crcp: rigid_design_panel("CRCP", "crcp")
+                        # ── แสดงตารางชั้นทาง ──
+                        if layer_r:
+                            st.markdown("#### 📋 ชั้นโครงสร้างทาง")
+                            df_lr = pd.DataFrame([{
+                                "ชั้น": i+1,
+                                "วัสดุ": l["name"],
+                                "หนา (cm)": l["thickness_cm"],
+                                "E (MPa)": l["E_MPa"],
+                            } for i, l in enumerate(layer_r)])
+                            df_lr["h×E^(1/3)"] = df_lr.apply(
+                                lambda r: f"{r['หนา (cm)'] * r['E (MPa)']**( 1/3):.1f}", axis=1
+                            )
+                            st.dataframe(df_lr, use_container_width=True, hide_index=True)
+
+                            if e_eq_psi > 0:
+                                st.markdown(f"""
+                                <div class="result-info" style="font-size:0.88rem;">
+                                    E_equivalent = <b>{e_eq_psi:,.0f} psi</b>
+                                    ({e_eq_psi/145.038:.1f} MPa) &nbsp;|&nbsp;
+                                    DSB = <b>{total_h_cm/2.54:.1f} in</b>
+                                </div>""", unsafe_allow_html=True)
+
+    # ── เรียก panel แต่ละประเภท ──
+    with sub_jpcp:
+        rigid_design_panel("JPCP", "jpcp")
+    with sub_jrcp:
+        rigid_design_panel("JRCP", "jrcp")
+    with sub_crcp:
+        rigid_design_panel("CRCP", "crcp")
 
 # ══════════════════════════════════════════════
 #  TAB 6: REPORT & SAVE
