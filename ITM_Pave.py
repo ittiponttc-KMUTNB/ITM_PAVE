@@ -1,13 +1,14 @@
 # ╔══════════════════════════════════════════════════════════════════╗
-# ║  ITM Pave Pro v2.0 — AASHTO 1993 Pavement Design System        ║
+# ║  ITM Pave Pro — AASHTO 1993 Pavement Design System             ║
+# ║  Single-file Streamlit App | Engineering Green Theme            ║
 # ║  พัฒนาโดย รศ.ดร.อิทธิพล มีผล | ภาควิชาครุศาสตร์โยธา มจพ.    ║
 # ╠══════════════════════════════════════════════════════════════════╣
-# ║  TAB 1 │ ESAL Calculator  (LDF/DDF/Pt/R0 ร่วมกัน)             ║
-# ║  TAB 2 │ CBR Analysis                                          ║
-# ║  TAB 3 │ Flexible Design  (Pi=4.2, So=0.45)                   ║
-# ║  TAB 4 │ K-Value Nomograph                                     ║
-# ║  TAB 5 │ Rigid Design     (JPCP/JRCP + CRCP)                  ║
-# ║  TAB 6 │ Report & Save                                         ║
+# ║  TAB 1 │ ESAL Calculator (Upload Excel / Manual + Growth Rate) ║
+# ║  TAB 2 │ CBR Analysis (Percentile)                             ║
+# ║  TAB 3 │ Flexible Pavement Design                              ║
+# ║  TAB 4 │ K-Value Nomograph (k∞ + Loss of Support)             ║
+# ║  TAB 5 │ Rigid Design (JPCP / JRCP / CRCP)                    ║
+# ║  TAB 6 │ Report & Save (Word + JSON)          ปรับปรุง ครั้งที่ 1                 ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 # ─────────────────────────────────────────────
@@ -16,31 +17,48 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import math, json, io, base64
+import math
+import json
+import io
+import base64
 from datetime import datetime
 
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+MPL_OK = True
 
 import plotly.graph_objects as go
+PLOTLY_OK = True
 
 try:
     from scipy.optimize import brentq as _brentq
 except ImportError:
     def _brentq(f, a, b, xtol=1e-6, maxiter=500):
         fa, fb = f(a), f(b)
-        if fa * fb > 0: raise ValueError("No sign change")
+        if fa * fb > 0:
+            raise ValueError("No sign change")
         for _ in range(maxiter):
-            mid = (a+b)/2.0; fm = f(mid)
-            if abs(fm) < xtol or (b-a)/2.0 < xtol: return mid
-            if fa*fm < 0: b,fb = mid,fm
-            else: a,fa = mid,fm
-        return (a+b)/2.0
+            mid = (a + b) / 2.0
+            fm = f(mid)
+            if abs(fm) < xtol or (b - a) / 2.0 < xtol:
+                return mid
+            if fa * fm < 0:
+                b, fb = mid, fm
+            else:
+                a, fa = mid, fm
+        return (a + b) / 2.0
 
-import openpyxl
-from openpyxl import load_workbook
-OPENPYXL_OK = True
+# openpyxl — required for pd.read_excel
+try:
+    import openpyxl
+    from openpyxl import load_workbook
+    OPENPYXL_OK = True
+except ModuleNotFoundError:
+    OPENPYXL_OK = False
+    openpyxl = None
+    load_workbook = None
 
 from docx import Document as DocxDoc
 from docx.shared import Inches, Pt, Cm, RGBColor
@@ -50,14 +68,13 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 DOCX_OK = True
 
-from PIL import Image as PILImage, ImageDraw as PILDraw
-
 # ─────────────────────────────────────────────
 #  SEC 2: PAGE CONFIG
 # ─────────────────────────────────────────────
 st.set_page_config(
-    page_title="ITM Pave Pro v2.0",
-    page_icon="🛣️", layout="wide",
+    page_title="ITM Pave Pro – AASHTO 1993",
+    page_icon="🛣️",
+    layout="wide",
     initial_sidebar_state="expanded",
 )
 
@@ -67,94 +84,172 @@ st.set_page_config(
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
-html,body,[class*="css"]{font-family:'Sarabun',sans-serif;}
-.main-header{background:linear-gradient(135deg,#1B5E20 0%,#388E3C 60%,#43A047 100%);
-  color:white;padding:1.2rem 2rem;border-radius:14px;margin-bottom:1.2rem;
-  box-shadow:0 6px 20px rgba(27,94,32,0.35);border-left:6px solid #A5D6A7;}
-.main-header h1{margin:0;font-size:1.65rem;font-weight:700;}
-.main-header p{margin:0.2rem 0 0;font-size:0.88rem;opacity:0.88;}
-.card{background:#fff;border:1px solid #C8E6C9;border-left:5px solid #2E7D32;
-  border-radius:10px;padding:0.9rem 1.2rem;margin-bottom:0.9rem;
-  box-shadow:0 2px 8px rgba(46,125,50,0.08);}
-.card h4{color:#1B5E20;margin:0 0 0.7rem;font-size:0.97rem;font-weight:700;}
-.badge-ready{background:#E8F5E9;color:#2E7D32;border:1px solid #A5D6A7;
-  border-radius:20px;padding:0.2rem 0.75rem;font-size:0.8rem;font-weight:600;display:inline-block;}
-.badge-wait{background:#FFF8E1;color:#E65100;border:1px solid #FFE082;
-  border-radius:20px;padding:0.2rem 0.75rem;font-size:0.8rem;font-weight:600;display:inline-block;}
-.result-pass{background:#E8F5E9;border:1px solid #A5D6A7;border-radius:8px;
-  padding:0.7rem 1rem;color:#1B5E20;font-weight:600;margin:0.3rem 0;}
-.result-fail{background:#FFEBEE;border:1px solid #EF9A9A;border-radius:8px;
-  padding:0.7rem 1rem;color:#B71C1C;font-weight:600;margin:0.3rem 0;}
-.result-info{background:#E3F2FD;border:1px solid #90CAF9;border-radius:8px;
-  padding:0.7rem 1rem;color:#0D47A1;font-weight:600;margin:0.3rem 0;}
-.result-warn{background:#FFF8E1;border:1px solid #FFE082;border-radius:8px;
-  padding:0.7rem 1rem;color:#E65100;font-weight:600;margin:0.3rem 0;}
-.metric-box{background:#fff;border:1px solid #C8E6C9;border-radius:12px;
-  padding:0.9rem;text-align:center;box-shadow:0 2px 8px rgba(46,125,50,0.10);}
-.metric-box .val{font-size:1.4rem;font-weight:700;color:#1B5E20;font-family:'IBM Plex Mono',monospace;}
-.metric-box .lbl{font-size:0.75rem;color:#558B2F;margin-top:0.15rem;}
-.layer-row{background:#F9FBE7;border:1px solid #DCEDC8;border-radius:6px;
-  padding:0.3rem 0.8rem;margin:0.15rem 0;font-size:0.85rem;color:#33691E;
-  font-family:'IBM Plex Mono',monospace;}
-[data-baseweb="tab-list"]{gap:3px;}
-[data-baseweb="tab"]{background:#E8F5E9!important;border-radius:8px 8px 0 0!important;
-  font-weight:600!important;color:#1B5E20!important;padding:0.4rem 0.85rem!important;}
-[aria-selected="true"][data-baseweb="tab"]{background:#2E7D32!important;color:white!important;}
-[data-testid="stSidebar"]{background:#1B5E20;}
-[data-testid="stSidebar"] *{color:#E8F5E9!important;}
-button[kind="primary"]{background:#2E7D32!important;border-radius:8px!important;font-weight:700!important;}
-.stNumberInput>div>div>input{font-family:'IBM Plex Mono',monospace;font-weight:600;}
+
+html, body, [class*="css"] {
+    font-family: 'Sarabun', sans-serif;
+}
+
+/* ── Header ── */
+.main-header {
+    background: linear-gradient(135deg, #1B5E20 0%, #388E3C 60%, #43A047 100%);
+    color: white;
+    padding: 1.4rem 2rem;
+    border-radius: 14px;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 6px 20px rgba(27,94,32,0.35);
+    border-left: 6px solid #A5D6A7;
+}
+.main-header h1 { margin:0; font-size:1.75rem; font-weight:700; letter-spacing:-0.5px; }
+.main-header p  { margin:0.3rem 0 0; font-size:0.9rem; opacity:0.88; }
+
+/* ── Section Cards ── */
+.card {
+    background: #fff;
+    border: 1px solid #C8E6C9;
+    border-left: 5px solid #2E7D32;
+    border-radius: 10px;
+    padding: 1rem 1.3rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 8px rgba(46,125,50,0.08);
+}
+.card h4 { color:#1B5E20; margin:0 0 0.8rem; font-size:1rem; font-weight:700; }
+
+/* ── Status Badges ── */
+.badge-ready  { background:#E8F5E9; color:#2E7D32; border:1px solid #A5D6A7;
+                border-radius:20px; padding:0.25rem 0.8rem; font-size:0.82rem; font-weight:600; display:inline-block; }
+.badge-wait   { background:#FFF8E1; color:#E65100; border:1px solid #FFE082;
+                border-radius:20px; padding:0.25rem 0.8rem; font-size:0.82rem; font-weight:600; display:inline-block; }
+.badge-na     { background:#F5F5F5; color:#757575; border:1px solid #E0E0E0;
+                border-radius:20px; padding:0.25rem 0.8rem; font-size:0.82rem; font-weight:600; display:inline-block; }
+
+/* ── Result Boxes ── */
+.result-pass { background:#E8F5E9; border:1px solid #A5D6A7; border-radius:8px;
+               padding:0.8rem 1rem; color:#1B5E20; font-weight:600; margin:0.3rem 0; }
+.result-fail { background:#FFEBEE; border:1px solid #EF9A9A; border-radius:8px;
+               padding:0.8rem 1rem; color:#B71C1C; font-weight:600; margin:0.3rem 0; }
+.result-info { background:#E3F2FD; border:1px solid #90CAF9; border-radius:8px;
+               padding:0.8rem 1rem; color:#0D47A1; font-weight:600; margin:0.3rem 0; }
+.result-warn { background:#FFF8E1; border:1px solid #FFE082; border-radius:8px;
+               padding:0.8rem 1rem; color:#E65100; font-weight:600; margin:0.3rem 0; }
+
+/* ── Metric Box ── */
+.metric-box {
+    background:#fff; border:1px solid #C8E6C9; border-radius:12px;
+    padding:1rem; text-align:center;
+    box-shadow:0 2px 8px rgba(46,125,50,0.10);
+}
+.metric-box .val { font-size:1.5rem; font-weight:700; color:#1B5E20;
+                   font-family:'IBM Plex Mono', monospace; }
+.metric-box .lbl { font-size:0.78rem; color:#558B2F; margin-top:0.2rem; }
+
+/* ── Tabs ── */
+[data-baseweb="tab-list"] { gap:3px; }
+[data-baseweb="tab"] {
+    background:#E8F5E9 !important; border-radius:8px 8px 0 0 !important;
+    font-weight:600 !important; color:#1B5E20 !important;
+    padding:0.45rem 0.9rem !important;
+}
+[aria-selected="true"][data-baseweb="tab"] {
+    background:#2E7D32 !important; color:white !important;
+}
+
+/* ── Sidebar ── */
+[data-testid="stSidebar"] { background:#1B5E20; }
+[data-testid="stSidebar"] * { color:#E8F5E9 !important; }
+[data-testid="stSidebar"] hr { border-color:#2E7D32; }
+
+/* ── Buttons ── */
+button[kind="primary"] {
+    background:#2E7D32 !important; border-radius:8px !important;
+    font-weight:700 !important;
+}
+
+/* ── Number inputs ── */
+.stNumberInput > div > div > input {
+    font-family:'IBM Plex Mono', monospace; font-weight:600;
+}
+
+/* ── DataFrames ── */
+.stDataFrame { border-radius:8px; overflow:hidden; }
+
+/* ── Flow Arrow ── */
+.flow-arrow {
+    text-align:center; font-size:1.5rem; color:#43A047;
+    margin:0.3rem 0; line-height:1;
+}
 </style>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-#  SEC 4: CONSTANTS
+#  SEC 4: CONSTANTS & LOOKUP TABLES
 # ─────────────────────────────────────────────
 TON_TO_KIP = 2.2046
 
 VEHICLE_AXLES = {
-    "MB":  [(4,1,1),(11,1,1)],
-    "HB":  [(5,1,1),(20,2,1)],
-    "MT":  [(4,1,1),(11,1,1)],
-    "HT":  [(5,1,1),(20,2,1)],
-    "TR":  [(5,1,1),(20,2,1),(11,1,2)],
-    "STR": [(5,1,1),(20,2,2)],
+    "MB":  [(4,  1, 1), (11, 1, 1)],
+    "HB":  [(5,  1, 1), (20, 2, 1)],
+    "MT":  [(4,  1, 1), (11, 1, 1)],
+    "HT":  [(5,  1, 1), (20, 2, 1)],
+    "TR":  [(5,  1, 1), (20, 2, 1), (11, 1, 2)],
+    "STR": [(5,  1, 1), (20, 2, 2)],
 }
-VEHICLE_LABELS = {"MB":"Medium Bus","HB":"Heavy Bus","MT":"Medium Truck",
-                  "HT":"Heavy Truck","TR":"Trailer","STR":"Semi Trailer"}
-VEHICLE_COLS   = ["MB","HB","MT","HT","TR","STR"]
+VEHICLE_LABELS = {
+    "MB": "Medium Bus",  "HB": "Heavy Bus",
+    "MT": "Medium Truck","HT": "Heavy Truck",
+    "TR": "Trailer",     "STR": "Semi Trailer",
+}
+VEHICLE_COLS = ["MB", "HB", "MT", "HT", "TR", "STR"]
 
-SLAB_THICKNESSES = [25, 28, 30, 32, 35]
-SLAB_LABELS      = ["25 cm (10 in)","28 cm (11 in)","30 cm (12 in)",
-                     "32 cm (13 in)","35 cm (14 in)"]
+# SLAB_THICKNESSES: cm ตามมาตรฐานไทย (กรมทางหลวง)
+# แสดงผลพร้อมค่าอ้างอิงนิ้วกลม สำหรับเทียบตาราง AASHTO
+SLAB_THICKNESSES = [25, 28, 30, 32, 35]          # cm (ใช้คำนวณจริง)
+SLAB_LABELS      = ['25 cm (10 in)', '28 cm (11 in)', '30 cm (12 in)',
+                     '32 cm (13 in)', '35 cm (14 in)']  # แสดงใน UI/รายงาน
+SLAB_INCH        = [10, 11, 12, 13, 14]          # reference เท่านั้น
+SN_DEFAULTS      = [6.5, 7.1, 7.5, 8.0]
 
-ZR_MAP = {50:0.000,60:-0.253,70:-0.524,75:-0.674,80:-0.841,85:-1.037,
-          90:-1.282,91:-1.340,92:-1.405,93:-1.476,94:-1.555,95:-1.645,
-          96:-1.751,97:-1.881,98:-2.054,99:-2.327}
-
-# Flexible layer materials: {name: (ai, mi)}
-FLEX_MATERIALS = {
-    "None":                              (None, None),
-    "Asphalt Concrete (AC)":             (0.42, 1.0),
-    "Cement Treated Base UCS 24.5 ksc":  (0.15, 1.0),
-    "Cement Treated Base UCS 17.5 ksc":  (0.13, 1.0),
-    "Crushed Rock Base CBR 80%":         (0.14, 1.0),
-    "Soil Aggregate Subbase CBR 25%":    (0.10, 1.0),
-    "Soil Aggregate Subbase CBR 20%":    (0.09, 1.0),
-    "Sand Embankment CBR 10%":           (0.08, 1.0),
+ZR_MAP = {
+    50:0.000,60:-0.253,70:-0.524,75:-0.674,80:-0.841,85:-1.037,
+    90:-1.282,91:-1.340,92:-1.405,93:-1.476,94:-1.555,95:-1.645,
+    96:-1.751,97:-1.881,98:-2.054,99:-2.327,
 }
 
-# Rigid layer materials: {name: {e_mpa, e_psi}}
-RIGID_MATERIALS = {
-    "AC Interlayer":                       {"e_mpa":2500,"e_psi":362500},
-    "Cement Treated Base UCS 40 ksc":      {"e_mpa":1200,"e_psi":174000},
-    "MOD. Crushed Rock Base UCS 24.5 ksc": {"e_mpa": 850,"e_psi":123250},
-    "Soil Cement UCS 17.5 ksc":            {"e_mpa": 350,"e_psi": 50750},
-    "Crushed Rock Base CBR 80%":           {"e_mpa": 350,"e_psi": 50750},
-    "Soil Aggregate Subbase CBR 25%":      {"e_mpa": 150,"e_psi": 21750},
-    "Embankment":                          {"e_mpa": 100,"e_psi": 14500},
+J_VALUES = {"JPCP": 2.8, "JRCP": 2.8, "CRCP": 2.6}
+
+FLEX_LAYER_MATERIALS = {
+    "None":                                       (None, None),
+    "Asphalt Concrete (AC)":                      (0.42, 1.0),
+    "Cement Treated Base UCS 24.5 ksc":           (0.15, 1.0),
+    "Cement Treated Base UCS 17.5 ksc":           (0.13, 1.0),
+    "Crushed Rock Base CBR 80%":                  (0.14, 1.0),
+    "Soil Aggregate Subbase CBR 25%":             (0.10, 1.0),
+    "Soil Aggregate Subbase CBR 20%":             (0.09, 1.0),
+    "Soil Aggregate Subbase CBR 15%":             (0.08, 1.0),
+    "Sand Embankment CBR 10%":                    (0.08, 1.0),
 }
-RIGID_MAT_NAMES = ["None"] + list(RIGID_MATERIALS.keys())
+
+RIGID_LAYER_MATERIALS = {
+    "None":                                       None,
+    "AC Interlayer":                              2500,
+    "Lean Concrete Base (LCB)":                  5000,
+    "Cement Treated Base UCS 24.5 ksc":          1200,
+    "Cement Treated Base UCS 17.5 ksc":           850,
+    "Crushed Rock Base CBR 80%":                  350,
+    "Soil Aggregate Subbase CBR 25%":             150,
+    "Embankment":                                 100,
+}
+
+# E_MPa default ต่อวัสดุ (สำหรับ auto-fill Layer Editor)
+RIGID_LAYER_E_DEFAULT = {
+    "None":                                       0,
+    "AC Interlayer":                              2500,
+    "Lean Concrete Base (LCB)":                  5000,
+    "Cement Treated Base UCS 24.5 ksc":          1200,
+    "Cement Treated Base UCS 17.5 ksc":           850,
+    "Crushed Rock Base CBR 80%":                  350,
+    "Soil Aggregate Subbase CBR 25%":             150,
+    "Embankment":                                 100,
+}
 
 SAMPLE_CBR = [14.8,14.37,5.31,17.37,5.48,18.46,4.85,6.23,
               5.02,10.78,10.52,14,15.5,8.7,12.93,8.19,
@@ -165,400 +260,681 @@ SAMPLE_CBR = [14.8,14.37,5.31,17.37,5.48,18.46,4.85,6.23,
 # ─────────────────────────────────────────────
 #  SEC 5: ENGINE FUNCTIONS
 # ─────────────────────────────────────────────
-def ealf_flex(L1t, L2, SN, Pt):
-    L1=L1t*TON_TO_KIP
-    Gt=math.log10((4.2-Pt)/(4.2-1.5))
-    Bx=0.40+0.081*(L1+L2)**3.23/((SN+1)**5.19*L2**3.23)
-    B18=0.40+0.081*(18+1)**3.23/((SN+1)**5.19*1.0**3.23)
-    return 10**(4.79*math.log10(L1+L2)-4.33*math.log10(L2)
-                -4.79*math.log10(19)+Gt*(1/B18-1/Bx))
 
-def ealf_rigid(L1t, L2, D_cm, Pt):
-    L1=L1t*TON_TO_KIP; D=D_cm/2.54
-    Gt=math.log10((4.5-Pt)/(4.5-1.5))
-    Bx=1.0+3.63*(L1+L2)**5.20/((D+1)**8.46*L2**3.52)
-    B18=1.0+3.63*(18+1)**5.20/((D+1)**8.46*1.0**3.52)
-    return 10**(4.62*math.log10(L1+L2)-3.28*math.log10(L2)
-                -4.62*math.log10(19)+Gt*(1/B18-1/Bx))
+def ealf_flex(L1_ton, L2, SN, Pt):
+    L1  = L1_ton * TON_TO_KIP
+    Gt  = math.log10((4.2 - Pt) / (4.2 - 1.5))
+    Bx  = 0.40 + 0.081*(L1+L2)**3.23 / ((SN+1)**5.19 * L2**3.23)
+    B18 = 0.40 + 0.081*(18+1)**3.23  / ((SN+1)**5.19 * 1.0**3.23)
+    return 10**(4.79*math.log10(L1+L2) - 4.33*math.log10(L2)
+                - 4.79*math.log10(19) + Gt*(1/B18 - 1/Bx))
 
-def tf_flex(vt, SN, Pt):
-    return sum(ealf_flex(L1,L2,SN,Pt)*c for L1,L2,c in VEHICLE_AXLES[vt])
+def ealf_rigid(L1_ton, L2, D_cm, Pt):
+    L1  = L1_ton * TON_TO_KIP
+    D   = D_cm / 2.54
+    Gt  = math.log10((4.5 - Pt) / (4.5 - 1.5))
+    Bx  = 1.0 + 3.63*(L1+L2)**5.20 / ((D+1)**8.46 * L2**3.52)
+    B18 = 1.0 + 3.63*(18+1)**5.20  / ((D+1)**8.46 * 1.0**3.52)
+    return 10**(4.62*math.log10(L1+L2) - 3.28*math.log10(L2)
+                - 4.62*math.log10(19) + Gt*(1/B18 - 1/Bx))
 
-def tf_rigid(vt, D_cm, Pt):
-    return sum(ealf_rigid(L1,L2,D_cm,Pt)*c for L1,L2,c in VEHICLE_AXLES[vt])
+def truck_factor_flex(vtype, SN, Pt):
+    return sum(ealf_flex(L1,L2,SN,Pt)*cnt for L1,L2,cnt in VEHICLE_AXLES[vtype])
 
-def compute_esal(traffic_df, ldf, ddf, Pt, mode="rigid", sn_list=None):
-    """ESAL = Σ_year [ AADT × 365 × DDF × LDF × TF ]"""
-    DAYS = 365
+def truck_factor_rigid(vtype, D_cm, Pt):
+    return sum(ealf_rigid(L1,L2,D_cm,Pt)*cnt for L1,L2,cnt in VEHICLE_AXLES[vtype])
+
+def compute_esal_from_df(traffic_df, ldf, ddf, Pt, mode="rigid", sn_list=None):
+    """
+    คำนวณ ESAL จาก traffic DataFrame (AASHTO 1993)
+
+    สูตร: ESAL = Σ_ปี [ AADT(คัน/วัน) × 365 × DDF × LDF × TF ]
+
+    traffic_df : DataFrame คอลัมน์ Year, MB, HB, MT, HT, TR, STR
+                 ค่า = AADT 2 ทิศทาง (คัน/วัน) ต่อปี
+    ldf        : Lane Distribution Factor
+    ddf        : Directional Distribution Factor
+    Pt         : Terminal Serviceability
+    Returns    : {D_cm: esal} for rigid | {SN: esal} for flexible
+    """
+    DAYS_PER_YEAR = 365
     if mode == "rigid":
-        res = {D: 0.0 for D in SLAB_THICKNESSES}
+        keys    = SLAB_THICKNESSES
+        results = {k: 0.0 for k in keys}
         for _, row in traffic_df.iterrows():
-            for vt in VEHICLE_COLS:
-                cnt = float(row.get(vt, 0) or 0)
-                if cnt <= 0: continue
-                for D in SLAB_THICKNESSES:
-                    res[D] += cnt * DAYS * ddf * ldf * tf_rigid(vt, D, Pt)
-        return res
+            for vtype in VEHICLE_COLS:
+                cnt = float(row.get(vtype, 0) or 0)
+                if cnt <= 0:
+                    continue
+                for D in keys:
+                    tf_val = truck_factor_rigid(vtype, D, Pt)
+                    results[D] += cnt * DAYS_PER_YEAR * ddf * ldf * tf_val
+        return results
     else:
-        keys = sn_list or [6.5, 7.1, 7.5, 8.0]
-        res  = {k: 0.0 for k in keys}
+        keys    = sn_list or SN_DEFAULTS
+        results = {k: 0.0 for k in keys}
         for _, row in traffic_df.iterrows():
-            for vt in VEHICLE_COLS:
-                cnt = float(row.get(vt, 0) or 0)
-                if cnt <= 0: continue
+            for vtype in VEHICLE_COLS:
+                cnt = float(row.get(vtype, 0) or 0)
+                if cnt <= 0:
+                    continue
                 for SN in keys:
-                    res[SN] += cnt * DAYS * ddf * ldf * tf_flex(vt, SN, Pt)
-        return res
+                    tf_val = truck_factor_flex(vtype, SN, Pt)
+                    results[SN] += cnt * DAYS_PER_YEAR * ddf * ldf * tf_val
+        return results
 
-def sn_required(esal, zr, so, pi, pt, mr_psi):
-    logW = math.log10(max(esal,1))
+def aashto_sn_required(esal, zr, so, pi, pt, mr_psi):
+    delta_psi = pi - pt
+    logW18 = math.log10(max(esal, 1))
     def eq(SN):
-        if SN<=0: return -1e10
-        return (zr*so + 9.36*math.log10(SN+1) - 0.20
-                + math.log10((pi-pt)/2.7)/(0.40+1094/(SN+1)**5.19)
-                + 2.32*math.log10(mr_psi) - 8.07 - logW)
-    try: return _brentq(eq, 0.1, 30, xtol=1e-4)
-    except: return None
+        if SN <= 0: return -1e10
+        t1 = zr * so
+        t2 = 9.36*math.log10(SN+1) - 0.20
+        t3 = math.log10(delta_psi/2.7) / (0.40 + 1094/(SN+1)**5.19)
+        t4 = 2.32*math.log10(mr_psi) - 8.07
+        return t1+t2+t3+t4 - logW18
+    try:
+        return _brentq(eq, 0.1, 30, xtol=1e-4)
+    except:
+        return None
 
-def w18_rigid(d_cm, pi, pt, zr, so, sc_psi, cd, j, ec_psi, k_pci):
-    d=d_cm/2.54; dp=pi-pt
-    t1=zr*so; t2=7.35*math.log10(d+1)-0.06
-    t3=math.log10(dp/3.0)/(1+1.624e7/(d+1)**8.46)
-    n=sc_psi*cd*(d**0.75-1.132)
-    ek=(ec_psi/k_pci)**0.25
-    dv=215.63*j*(d**0.75-18.42/ek)
-    if n<=0 or dv<=0: return None
-    inner=n/dv
-    if inner<=0: return None
-    t4=(4.22-0.32*pt)*math.log10(inner)
+def aashto_rigid_w18(d_cm, pi, pt, zr, so, sc_psi, cd, j, ec_psi, k_pci):
+    d_in = d_cm / 2.54
+    delta_psi = pi - pt
+    t1 = zr * so
+    t2 = 7.35*math.log10(d_in+1) - 0.06
+    t3 = math.log10(delta_psi/3.0) / (1 + 1.624e7/(d_in+1)**8.46)
+    num4 = sc_psi * cd * (d_in**0.75 - 1.132)
+    den4 = 215.63 * j * (d_in**0.75 - 18.42/(ec_psi/k_pci)**0.25)
+    if num4 <= 0 or den4 <= 0:
+        return None
+    inner = num4 / den4
+    if inner <= 0:
+        return None
+    t4 = (4.22 - 0.32*pt) * math.log10(inner)
     return 10**(t1+t2+t3+t4)
 
-def cbr_to_mr(cbr): return 1500.0*cbr
-def mr_to_k(mr):    return mr/19.4
+def cbr_to_mr(cbr):
+    return 1500.0 * cbr
 
-def calc_percentile(vals):
-    arr=np.sort(np.array(vals,dtype=float)); n=len(arr)
-    u=np.unique(arr)
-    pct=np.array([np.sum(arr>=v)/n*100 for v in u])
-    return arr,n,u,pct
+def mr_to_k(mr_psi):
+    return mr_psi / 19.4
 
-def grow_traffic(base, rate_pct, years):
-    r=rate_pct/100.0
-    rows=[]
-    for y in range(1,years+1):
-        f=(1+r)**(y-1)
-        row={"Year":y}
-        for v in VEHICLE_COLS: row[v]=int(round(base.get(v,0)*f))
+def calc_percentile_cbr(cbr_values):
+    arr = np.sort(np.array(cbr_values, dtype=float))
+    n   = len(arr)
+    unique_cbr = np.unique(arr)
+    unique_pct = np.array([np.sum(arr >= v)/n*100 for v in unique_cbr])
+    return arr, n, unique_cbr, unique_pct
+
+def grow_traffic(base_row, growth_rate_pct, years):
+    """Generate DataFrame with yearly traffic from base year + growth rate."""
+    r = growth_rate_pct / 100.0
+    rows = []
+    for y in range(1, years+1):
+        factor = (1 + r)**(y - 1)
+        row = {"Year": y}
+        for v in VEHICLE_COLS:
+            row[v] = int(round(base_row.get(v, 0) * factor))
         rows.append(row)
     return pd.DataFrame(rows)
 
 # ─────────────────────────────────────────────
-#  SEC 6: NOMOGRAPH FUNCTIONS
+#  SEC 6: NOMOGRAPH DRAW FUNCTIONS (Matplotlib)
 # ─────────────────────────────────────────────
-def fig_to_bytes(fig):
-    buf=io.BytesIO()
-    fig.savefig(buf,format='png',dpi=150,bbox_inches='tight',
-                facecolor=fig.get_facecolor())
-    buf.seek(0); return buf.read()
 
-def draw_arrow(drw, s, e, color, lw=4, aw=14):
-    drw.line([s,e], fill=color, width=lw)
-    dx=e[0]-s[0]; dy=e[1]-s[1]
-    L=math.sqrt(dx*dx+dy*dy)
-    if L>0:
-        dx/=L; dy/=L; px=-dy; py=dx
-        bx=e[0]-aw*dx; by=e[1]-aw*dy
-        drw.polygon([(e[0],e[1]),(int(bx+aw*0.5*px),int(by+aw*0.5*py)),
-                     (int(bx-aw*0.5*px),int(by-aw*0.5*py))],fill=color)
+def draw_k_infinity_nomograph(esb_psi, dsb_in, k_sub_pci):
+    """
+    Composite k∞ Nomograph (AASHTO 1993 Fig. 3.3 approximation)
+    3 axes: Esb (left), DSB (center), k∞ (right)
+    """
+    fig, ax = plt.subplots(figsize=(8, 9))
+    ax.set_xlim(0, 10); ax.set_ylim(0, 10)
+    ax.axis('off')
+    ax.set_facecolor('#F1F8E9')
+    fig.patch.set_facecolor('#F1F8E9')
+
+    # Axis x-positions
+    x_esb, x_dsb, x_kinf = 1.5, 5.0, 8.5
+
+    # ── Axis lines ──
+    for x in [x_esb, x_dsb, x_kinf]:
+        ax.plot([x, x], [0.5, 9.5], color='#1B5E20', lw=2.5)
+
+    # ── Esb axis (left): 5,000 – 100,000 psi ──
+    esb_range = [5000, 10000, 20000, 30000, 50000, 100000]
+    esb_log_min = math.log10(5000)
+    esb_log_max = math.log10(100000)
+    def esb_to_y(v):
+        return 0.5 + 9.0*(math.log10(v)-esb_log_min)/(esb_log_max-esb_log_min)
+    for v in esb_range:
+        y = esb_to_y(v)
+        ax.plot([x_esb-0.15, x_esb+0.15], [y, y], color='#1B5E20', lw=1.5)
+        ax.text(x_esb-0.25, y, f"{v:,}", ha='right', va='center', fontsize=8, color='#1B5E20')
+    ax.text(x_esb, 9.8, "Esb (psi)", ha='center', va='bottom', fontsize=9, fontweight='bold', color='#1B5E20')
+
+    # ── DSB axis (center): 0 – 36 in ──
+    dsb_range = [0, 4, 8, 12, 16, 20, 24, 28, 32, 36]
+    def dsb_to_y(v):
+        return 0.5 + 9.0*(v/36.0)
+    for v in dsb_range:
+        y = dsb_to_y(v)
+        ax.plot([x_dsb-0.15, x_dsb+0.15], [y, y], color='#2E7D32', lw=1.5)
+        ax.text(x_dsb+0.25, y, f"{v}", ha='left', va='center', fontsize=8, color='#2E7D32')
+    ax.text(x_dsb, 9.8, "DSB (in)", ha='center', va='bottom', fontsize=9, fontweight='bold', color='#2E7D32')
+
+    # ── k∞ axis (right): 50 – 1000 pci ──
+    kinf_range = [50, 100, 150, 200, 300, 500, 700, 1000]
+    kinf_log_min = math.log10(50)
+    kinf_log_max = math.log10(1000)
+    def kinf_to_y(v):
+        return 0.5 + 9.0*(math.log10(v)-kinf_log_min)/(kinf_log_max-kinf_log_min)
+    for v in kinf_range:
+        y = kinf_to_y(v)
+        ax.plot([x_kinf-0.15, x_kinf+0.15], [y, y], color='#388E3C', lw=1.5)
+        ax.text(x_kinf+0.25, y, f"{v}", ha='left', va='center', fontsize=8, color='#388E3C')
+    ax.text(x_kinf, 9.8, "k∞ (pci)", ha='center', va='bottom', fontsize=9, fontweight='bold', color='#388E3C')
+
+    # ── Compute k∞ from inputs via AASHTO approximation ──
+    # Odemark: k∞ = k_sub * (1 + Esb*DSB/(k_sub*19.4*DSB^0.5 + 1))^0.4  (simplified)
+    if esb_psi > 0 and dsb_in >= 0 and k_sub_pci > 0:
+        if dsb_in == 0:
+            k_inf_calc = k_sub_pci
+        else:
+            h_eq = dsb_in * (esb_psi / (k_sub_pci * 19.4))**(1/3)
+            k_inf_calc = min(k_sub_pci * (1 + 0.55*h_eq**0.45), 1000)
+        k_inf_calc = max(50, min(1000, k_inf_calc))
+    else:
+        k_inf_calc = k_sub_pci
+
+    # ── Draw reading lines ──
+    y_esb  = esb_to_y(max(5000, min(100000, esb_psi)))
+    y_dsb  = dsb_to_y(max(0, min(36, dsb_in)))
+    y_kinf = kinf_to_y(max(50, min(1000, k_inf_calc)))
+
+    ax.annotate("", xy=(x_dsb, y_dsb), xytext=(x_esb, y_esb),
+                arrowprops=dict(arrowstyle="-", color='red', lw=2, linestyle='dashed'))
+    ax.annotate("", xy=(x_kinf, y_kinf), xytext=(x_dsb, y_dsb),
+                arrowprops=dict(arrowstyle="->", color='red', lw=2, linestyle='dashed'))
+
+    # Dots at reading points
+    for (xp, yp) in [(x_esb, y_esb), (x_dsb, y_dsb), (x_kinf, y_kinf)]:
+        ax.plot(xp, yp, 'o', color='red', markersize=8, zorder=5)
+
+    # k∞ result label
+    ax.text(x_kinf+1.0, y_kinf, f"k∞ = {k_inf_calc:.0f} pci",
+            ha='left', va='center', fontsize=11, fontweight='bold',
+            color='red', bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='red', alpha=0.9))
+
+    ax.set_title("Composite k∞ Nomograph (AASHTO 1993 Fig.3.3)", fontsize=11,
+                 fontweight='bold', color='#1B5E20', pad=15)
+    plt.tight_layout()
+    return fig, k_inf_calc
+
+
+def draw_loss_of_support_nomograph(k_inf_pci, ls_value):
+    """
+    Loss of Support Nomograph (AASHTO 1993 Fig. 3.7)
+    k_corrected = k_inf / 10^(LS*0.5) approximation
+    """
+    fig, ax = plt.subplots(figsize=(7, 8))
+    ax.set_xlim(0, 10); ax.set_ylim(0, 10)
+    ax.axis('off')
+    ax.set_facecolor('#F1F8E9')
+    fig.patch.set_facecolor('#F1F8E9')
+
+    x_kinf, x_kcorr = 2.5, 7.5
+    ls_colors = {0.0:'#1B5E20', 0.5:'#2E7D32', 1.0:'#43A047',
+                 1.5:'#66BB6A', 2.0:'#EF6C00', 3.0:'#B71C1C'}
+
+    k_range = [10, 20, 50, 100, 200, 300, 500, 700, 1000, 1500, 2000, 3000]
+    k_log_min = math.log10(10)
+    k_log_max = math.log10(3000)
+    def k_to_y(v):
+        return 0.5 + 9.0*(math.log10(max(v,10))-k_log_min)/(k_log_max-k_log_min)
+
+    for x in [x_kinf, x_kcorr]:
+        ax.plot([x,x],[0.5,9.5], color='#1B5E20', lw=2.5)
+
+    for v in k_range:
+        for x in [x_kinf, x_kcorr]:
+            y = k_to_y(v)
+            ax.plot([x-0.15, x+0.15],[y,y], color='#1B5E20', lw=1.5)
+        ax.text(x_kinf-0.25, k_to_y(v), f"{v}", ha='right', va='center', fontsize=8, color='#1B5E20')
+        ax.text(x_kcorr+0.25, k_to_y(v), f"{v}", ha='left', va='center', fontsize=8, color='#388E3C')
+
+    ax.text(x_kinf, 9.8, "k∞ (pci)", ha='center', va='bottom', fontsize=9, fontweight='bold', color='#1B5E20')
+    ax.text(x_kcorr, 9.8, "k_eff (pci)", ha='center', va='bottom', fontsize=9, fontweight='bold', color='#388E3C')
+
+    # Draw LS lines for all LS values
+    for ls, lc in ls_colors.items():
+        for k_val in [20, 50, 100, 200, 500, 1000, 2000]:
+            k_corr_ls = k_val / (10**(ls * 0.5))
+            k_corr_ls = max(10, min(3000, k_corr_ls))
+            y1 = k_to_y(k_val)
+            y2 = k_to_y(k_corr_ls)
+            ax.plot([x_kinf, x_kcorr],[y1, y2], color=lc, lw=0.8, alpha=0.4)
+        ax.text(5.0, k_to_y(50/(10**(ls*0.5))) + ls*0.3,
+                f"LS={ls}", ha='center', va='center', fontsize=7, color=lc, alpha=0.8)
+
+    # ── Compute k_corrected ──
+    k_corr_calc = k_inf_pci / (10**(ls_value * 0.5))
+    k_corr_calc = max(10, min(3000, k_corr_calc))
+
+    # Draw user's reading line
+    y1 = k_to_y(max(10, min(3000, k_inf_pci)))
+    y2 = k_to_y(k_corr_calc)
+    ax.annotate("", xy=(x_kcorr, y2), xytext=(x_kinf, y1),
+                arrowprops=dict(arrowstyle="->", color='red', lw=2.5))
+    for (xp, yp) in [(x_kinf, y1), (x_kcorr, y2)]:
+        ax.plot(xp, yp, 'o', color='red', markersize=9, zorder=5)
+
+    ax.text(x_kcorr+1.2, y2,
+            f"k_eff =\n{k_corr_calc:.0f} pci",
+            ha='left', va='center', fontsize=10, fontweight='bold',
+            color='red', bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='red', alpha=0.9))
+
+    ax.set_title(f"Loss of Support Nomograph  (LS = {ls_value})", fontsize=11,
+                 fontweight='bold', color='#1B5E20', pad=15)
+
+    # Legend
+    legend_x, legend_y = 3.5, 1.5
+    for i, (ls, lc) in enumerate(ls_colors.items()):
+        ax.plot(legend_x, legend_y - i*0.3, 's', color=lc, markersize=7)
+        ax.text(legend_x+0.2, legend_y - i*0.3, f"LS = {ls}", va='center', fontsize=7, color=lc)
+
+    plt.tight_layout()
+    return fig, k_corr_calc
+
+def fig_to_bytes(fig):
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight',
+                facecolor=fig.get_facecolor())
+    buf.seek(0)
+    return buf.read()
 
 # ─────────────────────────────────────────────
 #  SEC 7: WORD REPORT FUNCTIONS
 # ─────────────────────────────────────────────
-def _doc():
-    doc=DocxDoc()
-    s=doc.styles['Normal']; s.font.name='TH SarabunPSK'; s.font.size=Pt(15)
-    try: s._element.rPr.rFonts.set(qn('w:eastAsia'),'TH SarabunPSK')
-    except: pass
+
+def _new_doc():
+    if not DOCX_OK:
+        return None
+    doc = DocxDoc()
+    style = doc.styles['Normal']
+    style.font.name = 'TH SarabunPSK'
+    style.font.size = Pt(15)
+    try:
+        style._element.rPr.rFonts.set(qn('w:eastAsia'), 'TH SarabunPSK')
+    except:
+        pass
     return doc
 
-def _run(p, txt, bold=False, size=15, color=None, italic=False):
-    r=p.add_run(txt); r.font.name='TH SarabunPSK'; r.font.size=Pt(size)
-    r.font.bold=bold; r.font.italic=italic
-    if color: r.font.color.rgb=RGBColor(*color)
-    try: r._element.rPr.rFonts.set(qn('w:eastAsia'),'TH SarabunPSK')
-    except: pass
-    return r
+def _th_run(para, text, bold=False, size=15, color=None):
+    run = para.add_run(text)
+    run.font.name = 'TH SarabunPSK'
+    run.font.size = Pt(size)
+    run.font.bold = bold
+    if color:
+        run.font.color.rgb = RGBColor(*color)
+    try:
+        run._element.rPr.rFonts.set(qn('w:eastAsia'), 'TH SarabunPSK')
+    except:
+        pass
+    return run
 
-def _bg(cell, hex_):
-    tc=cell._tc; tcPr=tc.get_or_add_tcPr()
-    shd=OxmlElement('w:shd')
-    shd.set(qn('w:val'),'clear'); shd.set(qn('w:color'),'auto')
-    shd.set(qn('w:fill'),hex_); tcPr.append(shd)
+def _set_cell_bg(cell, hex_color):
+    tc   = cell._tc
+    tcPr = tc.get_or_add_tcPr()
+    shd  = OxmlElement('w:shd')
+    shd.set(qn('w:val'), 'clear')
+    shd.set(qn('w:color'), 'auto')
+    shd.set(qn('w:fill'), hex_color)
+    tcPr.append(shd)
 
-def _tbl(doc, headers, rows, bg='C8E6C9'):
-    t=doc.add_table(rows=1+len(rows),cols=len(headers))
-    t.style='Table Grid'; t.alignment=WD_TABLE_ALIGNMENT.CENTER
-    for j,h in enumerate(headers):
-        c=t.rows[0].cells[j]; p=c.paragraphs[0]
-        _run(p,h,bold=True,size=13); p.alignment=WD_ALIGN_PARAGRAPH.CENTER
-        _bg(c,bg)
-    for i,row in enumerate(rows):
-        for j,v in enumerate(row):
-            c=t.rows[i+1].cells[j]; p=c.paragraphs[0]
-            _run(p,str(v),size=13); p.alignment=WD_ALIGN_PARAGRAPH.CENTER
-    return t
+def _doc_to_bytes(doc):
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf.read()
 
-def _footer(doc):
-    p=doc.add_paragraph(); p.alignment=WD_ALIGN_PARAGRAPH.CENTER
-    _run(p,"พัฒนาโดย รศ.ดร.อิทธิพล มีผล  |  ภาควิชาครุศาสตร์โยธา  |  มจพ.",
-         size=12,color=(80,80,80))
+def _add_section_heading(doc, text, level=1):
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(6)
+    r = _th_run(p, text, bold=True, size=16 if level==1 else 14)
+    return p
 
-def _bytes(doc):
-    buf=io.BytesIO(); doc.save(buf); buf.seek(0); return buf.read()
+def _add_simple_table(doc, headers, rows, hdr_bg='C8E6C9'):
+    tbl = doc.add_table(rows=1+len(rows), cols=len(headers))
+    tbl.style = 'Table Grid'
+    tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    for j, h in enumerate(headers):
+        cell = tbl.rows[0].cells[j]
+        p = cell.paragraphs[0]
+        _th_run(p, h, bold=True, size=13)
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        _set_cell_bg(cell, hdr_bg)
+    for i, row_data in enumerate(rows):
+        for j, val in enumerate(row_data):
+            cell = tbl.rows[i+1].cells[j]
+            p = cell.paragraphs[0]
+            _th_run(p, str(val), size=13)
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    return tbl
 
-def report_esal(ss):
-    doc=_doc()
-    p=doc.add_paragraph(); _run(p,"1. ผลการคำนวณ ESAL",bold=True,size=16)
-    p2=doc.add_paragraph()
-    _run(p2,f"LDF={ss.get('ldf',0.9)} | DDF={ss.get('ddf',0.5)} | "
-             f"Pt={ss.get('pt',2.5)} | R0={ss.get('r0',90)}%",size=13)
+def build_report_esal(ss):
+    doc = _new_doc()
+    if not doc: return None
+    _add_section_heading(doc, "1. ผลการคำนวณ ESAL (Equivalent Single Axle Load)")
+    p = doc.add_paragraph()
+    _th_run(p, f"วิธีคำนวณ AASHTO 1993  |  LDF = {ss.get('ldf',0.9)}  |  DDF = {ss.get('ddf',0.5)}", size=13)
     doc.add_paragraph()
+
     if ss.get('esal_rigid'):
-        p3=doc.add_paragraph(); _run(p3,"1.1 ESAL – Rigid Pavement",bold=True,size=14)
-        _tbl(doc,["Slab","ESAL (Design Lane)"],
-             [[lbl,f"{ss['esal_rigid'].get(D,0):,.0f}"]
-              for D,lbl in zip(SLAB_THICKNESSES,SLAB_LABELS)])
+        _add_section_heading(doc, "1.1 ESAL – ผิวทางคอนกรีต", level=2)
+        hdr = ["Slab Thickness", "ESAL (Design Lane)"]
+        rows = [[lbl, f"{ss['esal_rigid'].get(D,0):,.0f}"]
+                for D, lbl in zip(SLAB_THICKNESSES, SLAB_LABELS)]
+        _add_simple_table(doc, hdr, rows)
         doc.add_paragraph()
+
     if ss.get('esal_flex'):
-        p4=doc.add_paragraph(); _run(p4,"1.2 ESAL – Flexible Pavement",bold=True,size=14)
-        _tbl(doc,["SN","ESAL (Design Lane)"],
-             [[f"SN {sn}",f"{v:,.0f}"] for sn,v in ss['esal_flex'].items()])
-    _footer(doc); return _bytes(doc)
+        _add_section_heading(doc, "1.2 ESAL – ผิวทางลาดยาง", level=2)
+        hdr = ["Structure Number (SN)", "ESAL (Design Lane)"]
+        rows = [[f"SN = {sn}", f"{v:,.0f}"] for sn,v in ss['esal_flex'].items()]
+        _add_simple_table(doc, hdr, rows)
 
-def report_cbr(ss):
-    doc=_doc()
-    p=doc.add_paragraph(); _run(p,"2. ผลการวิเคราะห์ค่า CBR",bold=True,size=16)
-    vals=ss.get('cbr_values',[])
-    if vals:
-        arr,n,u,pct=calc_percentile(vals)
-        pt_=ss.get('cbr_percentile',90)
-        cbd=float(np.interp(pt_,pct[::-1],u[::-1]))
-        p2=doc.add_paragraph()
-        _run(p2,f"n={n} | Percentile={pt_}% | CBR={cbd:.2f}% | "
-                 f"Mr={cbr_to_mr(cbd):,.0f} psi | k={mr_to_k(cbr_to_mr(cbd)):.1f} pci",size=13)
-    _footer(doc); return _bytes(doc)
+    _add_footer(doc)
+    return _doc_to_bytes(doc)
 
-def report_flex(ss):
-    doc=_doc()
-    p=doc.add_paragraph(); _run(p,"3. ผลการออกแบบ Flexible Pavement",bold=True,size=16)
-    res=ss.get('flex_results',{})
+def build_report_cbr(ss):
+    doc = _new_doc()
+    if not doc: return None
+    _add_section_heading(doc, "2. ผลการวิเคราะห์ค่า CBR")
+    cbr_vals = ss.get('cbr_values', [])
+    if cbr_vals:
+        arr, n, u_cbr, u_pct = calc_percentile_cbr(cbr_vals)
+        pct = ss.get('cbr_percentile', 90)
+        cbr_d = float(np.interp(pct, u_pct[::-1], u_cbr[::-1]))
+        p = doc.add_paragraph()
+        _th_run(p, f"จำนวนตัวอย่าง: {n}  |  Percentile: {pct}%  |  CBR ออกแบบ: {cbr_d:.2f}%", size=13)
+        doc.add_paragraph()
+        hdr = ["ลำดับ","CBR (%)","จำนวน ≥","Percentile (%)"]
+        rows = []
+        for i,(v,p2) in enumerate(zip(u_cbr, u_pct)):
+            cnt = int(np.sum(arr >= v))
+            rows.append([str(i+1), f"{v:.2f}", str(cnt), f"{p2:.1f}"])
+        _add_simple_table(doc, hdr, rows)
+    _add_footer(doc)
+    return _doc_to_bytes(doc)
+
+def build_report_flexible(ss):
+    doc = _new_doc()
+    if not doc: return None
+    _add_section_heading(doc, "3. ผลการออกแบบโครงสร้างชั้นทางลาดยาง (AASHTO 1993)")
+    res = ss.get('flex_results', {})
     if res:
-        p2=doc.add_paragraph()
-        status="✅ PASS" if res.get('pass') else "❌ FAIL"
-        _run(p2,f"SN Required={res.get('sn_req',0):.3f} | "
-                 f"SN Provided={res.get('sn_prov',0):.3f} | {status}",
-             bold=True,size=14)
+        p = doc.add_paragraph()
+        _th_run(p, f"Design ESAL = {res.get('esal',0):,.0f}  |  SN Required = {res.get('sn_req',0):.3f}  |  SN Provided = {res.get('sn_prov',0):.3f}", size=13)
+        p2 = doc.add_paragraph()
+        status = "✅ PASS" if res.get('pass') else "❌ FAIL"
+        _th_run(p2, f"ผลการตรวจสอบ: {status}", bold=True, size=14)
         doc.add_paragraph()
-        layers=res.get('layers',[])
+        layers = res.get('layers', [])
         if layers:
-            _tbl(doc,["ชั้น","วัสดุ","หนา(cm)","ai","mi","SNi","ΣSNi"],
-                 [[str(l['layer']),l['mat'],str(l['h']),
-                   f"{l['ai']:.2f}",f"{l['mi']:.1f}",
-                   f"{l['sni']:.3f}",f"{l['cum_sn']:.3f}"] for l in layers])
-    _footer(doc); return _bytes(doc)
+            hdr = ["ชั้นที่","วัสดุ","หนา (cm)","ai","mi","SNi","ΣSNi"]
+            rows = [[str(l['layer']),l['material'],str(l['h_cm']),
+                     f"{l['ai']:.2f}",f"{l['mi']:.1f}",
+                     f"{l['sni']:.3f}",f"{l['cum_sn']:.3f}"] for l in layers]
+            _add_simple_table(doc, hdr, rows)
+    _add_footer(doc)
+    return _doc_to_bytes(doc)
 
-def report_kvalue(ss):
-    doc=_doc()
-    p=doc.add_paragraph(); _run(p,"4. ค่า k_eff (Effective Modulus of Subgrade Reaction)",bold=True,size=16)
-    p2=doc.add_paragraph()
-    _run(p2,f"k∞={ss.get('k_inf',0):.1f} pci | LS={ss.get('ls_value',0)} | "
-             f"k_eff={ss.get('k_corrected',0):.1f} pci",size=13)
-    for key,cap in [('nomograph_img_k','รูปที่ 1 Composite k∞ Nomograph'),
-                    ('nomograph_img_ls','รูปที่ 2 Loss of Support Nomograph')]:
-        img_b=ss.get(key)
-        if img_b:
-            doc.add_paragraph()
-            pi_=doc.add_paragraph(); pi_.alignment=WD_ALIGN_PARAGRAPH.CENTER
-            pi_.add_run().add_picture(io.BytesIO(img_b),width=Cm(12))
-            pc=doc.add_paragraph(); pc.alignment=WD_ALIGN_PARAGRAPH.CENTER
-            _run(pc,cap,bold=True,size=14)
-    _footer(doc); return _bytes(doc)
-
-def report_rigid(ss):
-    doc=_doc()
-    p=doc.add_paragraph(); _run(p,"5. ผลการออกแบบ Rigid Pavement",bold=True,size=16)
-    rr=ss.get('rigid_results',{})
-    if not rr or 'results' not in rr:
-        _run(doc.add_paragraph(),"ยังไม่มีผลการคำนวณ",size=13)
-        _footer(doc); return _bytes(doc)
-    results=rr['results']; min_slab=rr['min_slab']
-    de=rr.get('design_esal',0); kv=rr.get('k_eff',0)
-    p2=doc.add_paragraph()
-    _run(p2,f"W18 Required={de:,.0f} | k_eff={kv:.0f} pci | "
-             f"f'c={rr.get('fc',0)} ksc | Sc={rr.get('sc',0)} psi | Cd={rr.get('cd',0)}",size=13)
-    doc.add_paragraph()
-    # ตารางผล
-    hdr=["Slab","JPCP/JRCP (J={:.1f})".format(rr.get('j_jr',2.8)),
-         "W18 Cap","CRCP (J={:.1f})".format(rr.get('j_crcp',2.6)),"W18 Cap"]
-    rows=[]
-    for D,lbl in zip(SLAB_THICKNESSES,SLAB_LABELS):
-        r_jr=results[D]['JPCP_JRCP']
-        r_cr=results[D]['CRCP']
-        s_jr="★PASS" if (r_jr['pass'] and min_slab.get('JPCP_JRCP')==D) else ("PASS" if r_jr['pass'] else "FAIL")
-        s_cr="★PASS" if (r_cr['pass'] and min_slab.get('CRCP')==D) else ("PASS" if r_cr['pass'] else "FAIL")
-        rows.append([lbl,s_jr,f"{r_jr['w18_cap']/1e6:.2f}M",
-                     s_cr,f"{r_cr['w18_cap']/1e6:.2f}M"])
-    _tbl(doc,hdr,rows)
-    doc.add_paragraph()
-    # Design thickness summary
-    p3=doc.add_paragraph(); _run(p3,"ความหนาออกแบบที่เลือก:",bold=True,size=14)
-    for pt_,key in [("JPCP / JRCP","JPCP_JRCP"),("CRCP","CRCP")]:
-        d_=min_slab.get(key)
-        lbl_=SLAB_LABELS[SLAB_THICKNESSES.index(d_)] if d_ else "ไม่มี Slab ที่ผ่าน"
-        p4=doc.add_paragraph()
-        _run(p4,f"  {pt_} = {lbl_}",size=13)
-    # Layer table
-    layers=rr.get('layers',[])
-    if layers:
+def build_report_kvalue(ss):
+    doc = _new_doc()
+    if not doc: return None
+    _add_section_heading(doc, "4. ค่า k_eff (Effective Modulus of Subgrade Reaction)")
+    p = doc.add_paragraph()
+    _th_run(p, f"k∞ = {ss.get('k_inf',0):.1f} pci  |  LS = {ss.get('ls_value',0)}  |  k_eff = {ss.get('k_corrected',0):.1f} pci", size=13)
+    imgs = ss.get('nomograph_img_k')
+    if imgs:
         doc.add_paragraph()
-        p5=doc.add_paragraph(); _run(p5,"ชั้นโครงสร้างทาง:",bold=True,size=14)
-        _tbl(doc,["วัสดุ","หนา (cm)","E (MPa)"],
-             [[l['name'],str(l['h_cm']),str(l['e_mpa'])] for l in layers])
-        p6=doc.add_paragraph()
-        _run(p6,f"E_equivalent={rr.get('e_eq_psi',0):,.0f} psi | "
-                 f"DSB={rr.get('dsb_in',0):.1f} in",size=13)
-    _footer(doc); return _bytes(doc)
+        p_img = doc.add_paragraph()
+        p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r = p_img.add_run()
+        r.add_picture(io.BytesIO(imgs), width=Cm(12))
+    imgs2 = ss.get('nomograph_img_ls')
+    if imgs2:
+        doc.add_paragraph()
+        p_img2 = doc.add_paragraph()
+        p_img2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r2 = p_img2.add_run()
+        r2.add_picture(io.BytesIO(imgs2), width=Cm(12))
+    _add_footer(doc)
+    return _doc_to_bytes(doc)
 
-def report_full(ss):
-    doc=_doc()
-    p=doc.add_paragraph(); p.alignment=WD_ALIGN_PARAGRAPH.CENTER
-    _run(p,"รายการคำนวณออกแบบโครงสร้างชั้นทาง",bold=True,size=20)
-    p2=doc.add_paragraph(); p2.alignment=WD_ALIGN_PARAGRAPH.CENTER
-    _run(p2,"ตามวิธี AASHTO 1993",size=16)
-    p3=doc.add_paragraph(); p3.alignment=WD_ALIGN_PARAGRAPH.CENTER
-    _run(p3,f"วันที่: {datetime.now().strftime('%d/%m/%Y %H:%M')}",size=13)
+def build_report_rigid(ss):
+    doc = _new_doc()
+    if not doc: return None
+    _add_section_heading(doc, "5. ผลการออกแบบความหนาถนนคอนกรีต (AASHTO 1993)")
+    rigid_res = ss.get('rigid_results', {})
+    for ptype, res in rigid_res.items():
+        if not res: continue
+        _add_section_heading(doc, f"5.{list(rigid_res.keys()).index(ptype)+1} {ptype}", level=2)
+        p = doc.add_paragraph()
+        _th_run(p, f"Slab = {res.get('d_cm',0)} cm  |  k_eff = {res.get('k_eff',0):.1f} pci  |  f'c = {res.get('fc',0)} ksc", size=13)
+        p2 = doc.add_paragraph()
+        status = "✅ PASS" if res.get('pass') else "❌ FAIL"
+        _th_run(p2, f"W18 Capacity = {res.get('w18_cap',0):,.0f}  |  W18 Required = {res.get('w18_req',0):,.0f}  |  {status}", bold=True, size=13)
+        doc.add_paragraph()
+    _add_footer(doc)
+    return _doc_to_bytes(doc)
+
+def build_report_full(ss):
+    doc = _new_doc()
+    if not doc: return None
+    # Cover
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _th_run(p, "รายการคำนวณออกแบบโครงสร้างชั้นทาง", bold=True, size=20)
+    p2 = doc.add_paragraph()
+    p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _th_run(p2, "ตามวิธี AASHTO 1993", size=16)
+    p3 = doc.add_paragraph()
+    p3.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _th_run(p3, f"วันที่: {datetime.now().strftime('%d/%m/%Y %H:%M')}", size=13)
     doc.add_page_break()
-    for fn,key in [(report_esal,'esal_rigid'),(report_cbr,'cbr_values'),
-                   (report_flex,'flex_results'),(report_kvalue,'k_corrected'),
-                   (report_rigid,'rigid_results')]:
+
+    sections = [
+        ('esal_rigid', build_report_esal),
+        ('cbr_values', build_report_cbr),
+        ('flex_results', build_report_flexible),
+        ('k_corrected', build_report_kvalue),
+        ('rigid_results', build_report_rigid),
+    ]
+    for key, fn in sections:
         if ss.get(key):
-            b=fn(ss)
-            if b:
-                sub=DocxDoc(io.BytesIO(b))
-                for el in sub.element.body: doc.element.body.append(el)
-                doc.add_page_break()
-    _footer(doc); return _bytes(doc)
+            sub_bytes = fn(ss)
+            if sub_bytes:
+                sub_doc = DocxDoc(io.BytesIO(sub_bytes))
+                for elem in sub_doc.element.body:
+                    doc.element.body.append(elem)
+    _add_footer(doc)
+    return _doc_to_bytes(doc)
+
+def _add_footer(doc):
+    doc.add_paragraph()
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _th_run(p, "พัฒนาโดย รศ.ดร.อิทธิพล มีผล  |  ภาควิชาครุศาสตร์โยธา  |  มจพ.", italic=False, size=12, color=(80,80,80))
+
+# patch _th_run for italic param
+_th_run_orig = _th_run
+def _th_run(para, text, bold=False, size=15, color=None, italic=False):
+    run = para.add_run(text)
+    run.font.name = 'TH SarabunPSK'
+    run.font.size = Pt(size)
+    run.font.bold = bold
+    run.font.italic = italic
+    if color:
+        run.font.color.rgb = RGBColor(*color)
+    try:
+        run._element.rPr.rFonts.set(qn('w:eastAsia'), 'TH SarabunPSK')
+    except:
+        pass
+    return run
 
 # ─────────────────────────────────────────────
-#  SEC 8: SESSION STATE
+#  SEC 8: SESSION STATE INIT
 # ─────────────────────────────────────────────
-def init_ss():
-    defs = {
-        # Tab 1 — shared params
-        'ldf':0.9,'ddf':0.5,'pt':2.5,'r0':90,
-        'traffic_df':None,
-        'esal_rigid':{D:0 for D in SLAB_THICKNESSES},
-        'esal_flex':{},
-        'sn_list':[6.5,7.1,7.5,8.0],
-        # Tab 2
-        'cbr_values':[],'cbr_percentile':90.0,
-        'cbr_design':3.0,'mr_psi':4500.0,'k_sub_pci':231.9,
-        # Tab 3
-        'flex_results':{},
-        # Tab 4
-        'k_inf':0.0,'k_corrected':0.0,'ls_value':1.0,
-        'nomograph_img_k':None,'nomograph_img_ls':None,
-        'nomo_esb':50000,'nomo_dsb':6.0,
-        'img1_original':None,'img2_original':None,
-        # Tab 5
-        'rigid_results':{},
+def ss_init():
+    defaults = {
+        # Traffic & ESAL
+        'traffic_df':      None,
+        'esal_rigid':      {},
+        'esal_flex':       {},
+        'ldf':             0.9,
+        'ddf':             0.5,
+        'pt_rigid':        2.5,
+        'pt_flex':         2.5,
+        'sn_list':         [6.5, 7.1, 7.5, 8.0],
+        # CBR
+        'cbr_values':      [],
+        'cbr_percentile':  90.0,
+        'cbr_design':      3.0,
+        'mr_subgrade_psi': 4500.0,
+        'k_subgrade_pci':  231.9,
+        # Flexible
+        'flex_results':    {},
+        # K-Value
+        'k_inf':           0.0,
+        'k_corrected':     0.0,
+        'ls_value':        1.0,
+        'nomograph_img_k': None,
+        'nomograph_img_ls':None,
+        # Rigid
+        'rigid_results':   {},
     }
-    for k,v in defs.items():
+    for k, v in defaults.items():
         if k not in st.session_state:
-            st.session_state[k]=v
+            st.session_state[k] = v
 
-init_ss()
+ss_init()
 ss = st.session_state
 
-def badge(key, label):
-    val=ss.get(key)
-    has=(val is not None and val!={}and val!=[]and val!=0.0 and val!={D:0 for D in SLAB_THICKNESSES})
-    cls="badge-ready" if has else "badge-wait"
-    icon="✅" if has else "⚠️"
-    return f'<span class="{cls}">{icon} {label}</span>'
+# ─────────────────────────────────────────────
+#  HELPER: Status badge
+# ─────────────────────────────────────────────
+def status_badge(key, label=None):
+    val = ss.get(key)
+    has = (val is not None and val != {} and val != [] and val != 0.0)
+    cls = "badge-ready" if has else "badge-wait"
+    icon = "✅" if has else "⚠️"
+    lbl = label or key
+    return f'<span class="{cls}">{icon} {lbl}</span>'
 
 # ─────────────────────────────────────────────
 #  SIDEBAR
 # ─────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("""<div style='text-align:center;padding:0.8rem 0 0.4rem;'>
-        <div style='font-size:2rem;'>🛣️</div>
-        <div style='font-weight:700;font-size:1rem;color:#A5D6A7;'>ITM Pave Pro</div>
-        <div style='font-size:0.75rem;color:#81C784;'>v2.0 | AASHTO 1993</div>
-    </div>""",unsafe_allow_html=True)
+    # ── Dependency warnings ──
+    if not OPENPYXL_OK:
+        st.warning("⚠️ openpyxl ไม่พร้อม — Upload Excel จะไม่ทำงาน")
+    if not DOCX_OK:
+        st.warning("⚠️ python-docx ไม่พร้อม — Word report จะไม่ทำงาน")
+
+    st.markdown("""
+    <div style='text-align:center;padding:1rem 0 0.5rem;'>
+        <div style='font-size:2.2rem;'>🛣️</div>
+        <div style='font-weight:700;font-size:1.1rem;color:#A5D6A7;'>ITM Pave Pro</div>
+        <div style='font-size:0.78rem;color:#81C784;'>AASHTO 1993</div>
+    </div>
+    """, unsafe_allow_html=True)
     st.divider()
-    st.markdown("**📊 สถานะ**")
-    for k,lbl in [('esal_rigid','ESAL'),('cbr_values','CBR'),
-                   ('flex_results','Flexible'),('k_corrected','K-Value'),
-                   ('rigid_results','Rigid')]:
-        st.markdown(badge(k,lbl),unsafe_allow_html=True)
+
+    st.markdown("**📊 สถานะข้อมูล**")
+    st.markdown(status_badge('esal_rigid','ESAL Rigid'), unsafe_allow_html=True)
+    st.markdown(status_badge('esal_flex','ESAL Flexible'), unsafe_allow_html=True)
+    st.markdown(status_badge('cbr_values','CBR Data'), unsafe_allow_html=True)
+    st.markdown(status_badge('flex_results','Flex Design'), unsafe_allow_html=True)
+    st.markdown(status_badge('k_corrected','K-Value'), unsafe_allow_html=True)
+    st.markdown(status_badge('rigid_results','Rigid Design'), unsafe_allow_html=True)
     st.divider()
-    st.markdown("**💾 Save / Load**")
-    if st.button("💾 Save JSON",use_container_width=True):
-        save={
-            'ldf':ss.ldf,'ddf':ss.ddf,'pt':ss.pt,'r0':ss.r0,
-            'esal_rigid':{str(k):v for k,v in ss.esal_rigid.items()},
-            'esal_flex':{str(k):v for k,v in ss.esal_flex.items()},
-            'sn_list':ss.sn_list,
-            'cbr_values':ss.cbr_values,'cbr_percentile':ss.cbr_percentile,
-            'cbr_design':ss.cbr_design,'mr_psi':ss.mr_psi,'k_sub_pci':ss.k_sub_pci,
-            'flex_results':ss.flex_results,
-            'k_inf':ss.k_inf,'k_corrected':ss.k_corrected,'ls_value':ss.ls_value,
-            'nomo_esb':ss.nomo_esb,'nomo_dsb':ss.nomo_dsb,
-            'rigid_results':{str(k):v for k,v in ss.rigid_results.items()} if isinstance(ss.rigid_results,dict) and 'results' not in ss.rigid_results else {},
-            'traffic_df':ss.traffic_df.to_dict('records') if ss.traffic_df is not None else None,
+
+    st.markdown("**💾 Save / Load Project**")
+    if st.button("💾 Save JSON", use_container_width=True):
+        save_data = {
+            'esal_rigid':     ss.esal_rigid,
+            'esal_flex':      {str(k):v for k,v in ss.esal_flex.items()},
+            'ldf':            ss.ldf, 'ddf': ss.ddf,
+            'pt_rigid':       ss.pt_rigid, 'pt_flex': ss.pt_flex,
+            'sn_list':        ss.sn_list,
+            'cbr_values':     ss.cbr_values,
+            'cbr_percentile': ss.cbr_percentile,
+            'cbr_design':     ss.cbr_design,
+            'mr_subgrade_psi':ss.mr_subgrade_psi,
+            'k_subgrade_pci': ss.k_subgrade_pci,
+            'flex_results':   ss.flex_results,
+            'k_inf':          ss.k_inf,
+            'k_corrected':    ss.k_corrected,
+            'ls_value':       ss.ls_value,
+            'rigid_results':  ss.rigid_results,
+            'traffic_df':     ss.traffic_df.to_dict('records') if ss.traffic_df is not None else None,
         }
-        jb=json.dumps(save,ensure_ascii=False,indent=2).encode('utf-8')
-        st.download_button("📥 Download",jb,
-            f"itm_pave_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
-            "application/json",use_container_width=True)
-    uj=st.file_uploader("📂 Load JSON",type=['json'])
-    if uj:
+        json_bytes = json.dumps(save_data, ensure_ascii=False, indent=2).encode('utf-8')
+        st.download_button("📥 Download JSON", json_bytes,
+                           file_name=f"itm_pave_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
+                           mime="application/json", use_container_width=True)
+
+    uploaded_json = st.file_uploader("📂 Load JSON", type=['json'])
+    if uploaded_json:
         try:
-            d=json.loads(uj.read().decode('utf-8'))
-            for k in ['ldf','ddf','pt','r0','sn_list','cbr_values',
-                       'cbr_percentile','cbr_design','mr_psi','k_sub_pci',
-                       'flex_results','k_inf','k_corrected','ls_value',
-                       'nomo_esb','nomo_dsb']:
-                if k in d: ss[k]=d[k]
-            if 'esal_rigid' in d:
-                ss.esal_rigid={int(k):v for k,v in d['esal_rigid'].items()}
-            if 'esal_flex' in d:
-                ss.esal_flex={float(k):v for k,v in d['esal_flex'].items()}
-            if d.get('traffic_df'):
-                ss.traffic_df=pd.DataFrame(d['traffic_df'])
-            st.success("✅ โหลดสำเร็จ!"); st.rerun()
+            data = json.loads(uploaded_json.read().decode('utf-8'))
+            for k in ['esal_rigid','ldf','ddf','pt_rigid','pt_flex','sn_list',
+                      'cbr_values','cbr_percentile','cbr_design','mr_subgrade_psi',
+                      'k_subgrade_pci','flex_results','k_inf','k_corrected',
+                      'ls_value','rigid_results']:
+                if k in data:
+                    ss[k] = data[k]
+            if 'esal_flex' in data:
+                ss.esal_flex = {float(k):v for k,v in data['esal_flex'].items()}
+            if data.get('traffic_df'):
+                ss.traffic_df = pd.DataFrame(data['traffic_df'])
+            st.success("✅ โหลดข้อมูลสำเร็จ!")
+            st.rerun()
         except Exception as e:
-            st.error(f"❌ {e}")
+            st.error(f"❌ โหลดไม่สำเร็จ: {e}")
+
     st.divider()
-    st.markdown("""<div style='font-size:0.7rem;color:#81C784;text-align:center;line-height:1.8;'>
-    รศ.ดร.อิทธิพล มีผล<br>ภาควิชาครุศาสตร์โยธา<br>คณะครุศาสตร์อุตสาหกรรม มจพ.
-    </div>""",unsafe_allow_html=True)
+    st.markdown("""
+    <div style='font-size:0.72rem;color:#81C784;text-align:center;line-height:1.8;'>
+    รศ.ดร.อิทธิพล มีผล<br>
+    ภาควิชาครุศาสตร์โยธา<br>
+    คณะครุศาสตร์อุตสาหกรรม มจพ.<br>
+    ITM Pave Pro v1.0
+    </div>
+    """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
 #  HEADER
 # ─────────────────────────────────────────────
-st.markdown("""<div class="main-header">
-    <h1>🛣️ ITM Pave Pro v2.0 — ระบบออกแบบโครงสร้างชั้นทาง AASHTO 1993</h1>
-    <p>ESAL · CBR · Flexible Design · K-Value Nomograph · Rigid Design (JPCP/JRCP/CRCP) · Report</p>
-</div>""",unsafe_allow_html=True)
+st.markdown("""
+<div class="main-header">
+    <h1>🛣️ ITM Pave Pro — ระบบออกแบบโครงสร้างชั้นทาง AASHTO 1993</h1>
+    <p>ESAL Calculator · CBR Analysis · Flexible Design · K-Value Nomograph · Rigid Design · Report</p>
+</div>
+""", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
 #  MAIN TABS
 # ─────────────────────────────────────────────
-tab1,tab2,tab3,tab4,tab5,tab6 = st.tabs([
-    "🚛 ESAL","📊 CBR","🔧 Flexible Design",
-    "📐 K-Value Nomograph","🏗️ Rigid Design","📄 Report & Save"
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "🚛 ESAL Calculator",
+    "📊 CBR Analysis",
+    "🔧 Flexible Design",
+    "📐 K-Value Nomograph",
+    "🏗️ Rigid Design",
+    "📄 Report & Save",
 ])
 
 # ══════════════════════════════════════════════
@@ -567,738 +943,1136 @@ tab1,tab2,tab3,tab4,tab5,tab6 = st.tabs([
 with tab1:
     st.markdown("### 🚛 ESAL Calculator — AASHTO 1993")
 
-    # ── พารามิเตอร์ร่วม ──
-    st.markdown('<div class="card"><h4>⚙️ พารามิเตอร์ร่วม (ใช้กับ Flexible และ Rigid)</h4>',unsafe_allow_html=True)
-    pc1,pc2,pc3,pc4 = st.columns(4)
-    with pc1:
-        ldf=st.number_input("Lane Distribution Factor",value=ss.ldf,
-                            step=0.05,min_value=0.1,max_value=1.0,key="t1_ldf")
-        ss.ldf=ldf
-    with pc2:
-        ddf=st.number_input("Directional Dist. Factor",value=ss.ddf,
-                            step=0.05,min_value=0.1,max_value=1.0,key="t1_ddf")
-        ss.ddf=ddf
-    with pc3:
-        pt=st.number_input("Terminal Serviceability Pt",value=ss.pt,
-                           step=0.1,min_value=1.5,max_value=3.5,key="t1_pt")
-        ss.pt=pt
-    with pc4:
-        r0=st.selectbox("Reliability R0 (%)",list(ZR_MAP.keys()),
-                        index=list(ZR_MAP.keys()).index(ss.r0) if ss.r0 in ZR_MAP else 10,
-                        key="t1_r0")
-        ss.r0=r0
-        zr=ZR_MAP[r0]
-        st.caption(f"ZR = {zr}")
-    st.markdown('</div>',unsafe_allow_html=True)
+    sub_esal_rigid, sub_esal_flex = st.tabs(["🔴 Rigid Pavement", "🟢 Flexible Pavement"])
 
-    # ── Traffic Data ──
-    st.markdown('<div class="card"><h4>📁 ข้อมูลปริมาณจราจร (คัน/วัน สองทิศทาง)</h4>',unsafe_allow_html=True)
-    col_l,col_r=st.columns([1,1])
-    with col_l:
-        mode=st.radio("วิธีกรอกข้อมูล",["📁 Upload Excel","✏️ กรอกมือ + Growth Rate"],horizontal=True)
-        if mode=="📁 Upload Excel":
-            xl=st.file_uploader("ไฟล์ Excel (Year,MB,HB,MT,HT,TR,STR)",type=['xlsx'])
-            st.caption("คอลัมน์: Year | MB | HB | MT | HT | TR | STR")
-            if xl:
-                try:
-                    df_up=pd.read_excel(xl,engine='openpyxl')
-                    df_up.columns=[c.strip() for c in df_up.columns]
-                    cm_={c:vc for c in df_up.columns for vc in ['Year']+VEHICLE_COLS if c.upper()==vc.upper()}
-                    df_up=df_up.rename(columns=cm_)
-                    for vc in VEHICLE_COLS:
-                        if vc not in df_up.columns: df_up[vc]=0
-                    ss.traffic_df=df_up[['Year']+VEHICLE_COLS].fillna(0)
-                    st.success(f"✅ {len(df_up)} ปี")
-                except Exception as e:
-                    st.error(f"❌ {e}")
-        else:
-            st.markdown("**ปีแรก (คัน/วัน)**")
-            bc=st.columns(6)
-            base_={vc:bc[i].number_input(vc,value={"MB":120,"HB":60,"MT":250,"HT":180,"TR":100,"STR":120}[vc],
-                                         min_value=0,step=10,key=f"b_{vc}") for i,vc in enumerate(VEHICLE_COLS)}
-            gc1,gc2=st.columns(2)
-            with gc1: gr=st.number_input("Growth Rate (%/ปี)",value=4.5,step=0.5,min_value=0.0,max_value=20.0)
-            with gc2: yr=st.number_input("Design Period (ปี)",value=20,min_value=1,max_value=40,step=1)
-            if st.button("🔄 สร้างตาราง",type="primary"):
-                ss.traffic_df=grow_traffic(base_,gr,int(yr))
-                st.success(f"✅ {int(yr)} ปี")
-    with col_r:
-        if ss.traffic_df is not None:
-            st.markdown("**ตารางจราจร:**")
-            st.dataframe(ss.traffic_df.style.format({c:"{:,.0f}" for c in VEHICLE_COLS}),
-                        use_container_width=True,height=280)
-        else:
-            st.info("⬅️ กรอกหรือ Upload ข้อมูลก่อน")
-    st.markdown('</div>',unsafe_allow_html=True)
+    # ── Shared Traffic Input (above sub-tabs) ──
+    with st.expander("📋 ข้อมูลปริมาณจราจร (ใช้ร่วมกันทั้ง Rigid & Flexible)", expanded=True):
+        col_inp1, col_inp2 = st.columns([1, 1])
 
-    # ── SN List สำหรับ Flexible ──
-    st.markdown('<div class="card"><h4>📐 Structure Number (SN) สำหรับ Flexible</h4>',unsafe_allow_html=True)
-    sn_cols=st.columns(4)
-    sn_list=[round(sn_cols[i].number_input(f"SN {i+1}",value=ss.sn_list[i] if i<len(ss.sn_list) else 6.5,
-                   min_value=1.0,max_value=20.0,step=0.1,key=f"sn_{i}",format="%.1f"),2) for i in range(4)]
-    st.markdown('</div>',unsafe_allow_html=True)
+        with col_inp1:
+            st.markdown('<div class="card"><h4>📁 Upload Excel / กรอกมือ</h4>', unsafe_allow_html=True)
+            input_mode = st.radio("วิธีกรอกข้อมูล", ["📁 Upload Excel", "✏️ กรอกมือ + Growth Rate"], horizontal=True)
 
-    # ── คำนวณปุ่มเดียว ──
-    if st.button("🔄 คำนวณ ESAL (Rigid + Flexible พร้อมกัน)",type="primary",use_container_width=True):
-        if ss.traffic_df is None:
-            st.warning("⚠️ กรุณากรอกข้อมูลจราจรก่อน")
-        else:
-            er=compute_esal(ss.traffic_df,ldf,ddf,pt,"rigid")
-            ef=compute_esal(ss.traffic_df,ldf,ddf,pt,"flex",sn_list)
-            ss.esal_rigid=er; ss.esal_flex=ef; ss.sn_list=sn_list
-            st.rerun()
+            if input_mode == "📁 Upload Excel":
+                uploaded_xl = st.file_uploader("เลือกไฟล์ Excel (.xlsx)", type=['xlsx'])
+                st.caption("รูปแบบ: คอลัมน์ Year, MB, HB, MT, HT, TR, STR")
+                if uploaded_xl:
+                    if not OPENPYXL_OK:
+                        st.error("❌ openpyxl ไม่ได้ติดตั้ง — กรุณาใช้วิธี 'กรอกมือ + Growth Rate' แทน")
+                    else:
+                        try:
+                            df_up = pd.read_excel(uploaded_xl, engine='openpyxl')
+                            df_up.columns = [c.strip() for c in df_up.columns]
+                            col_map = {}
+                            for c in df_up.columns:
+                                for vc in ['Year']+VEHICLE_COLS:
+                                    if c.upper() == vc.upper():
+                                        col_map[c] = vc
+                            df_up = df_up.rename(columns=col_map)
+                            for vc in VEHICLE_COLS:
+                                if vc not in df_up.columns:
+                                    df_up[vc] = 0
+                            ss.traffic_df = df_up[['Year']+VEHICLE_COLS].fillna(0)
+                            st.success(f"✅ อ่านข้อมูล {len(df_up)} ปีสำเร็จ")
+                        except Exception as e:
+                            st.error(f"❌ {e}")
+            else:
+                st.markdown("**ปริมาณจราจรปีแรก (คัน/วัน)**")
+                base_cols = st.columns(6)
+                base_row = {}
+                defaults_base = {"MB":120,"HB":60,"MT":250,"HT":180,"TR":100,"STR":120}
+                for i, vc in enumerate(VEHICLE_COLS):
+                    with base_cols[i]:
+                        base_row[vc] = st.number_input(vc, value=defaults_base[vc],
+                                                       min_value=0, step=10, key=f"base_{vc}")
+                gc1, gc2 = st.columns(2)
+                with gc1:
+                    growth_rate = st.number_input("Growth Rate (%/ปี)", value=4.5, step=0.5, min_value=0.0, max_value=20.0)
+                with gc2:
+                    design_years = st.number_input("Design Period (ปี)", value=20, min_value=1, max_value=40, step=1)
+                if st.button("🔄 สร้างตารางจราจร", type="primary"):
+                    ss.traffic_df = grow_traffic(base_row, growth_rate, int(design_years))
+                    st.success(f"✅ สร้างตาราง {int(design_years)} ปีสำเร็จ")
 
-    # ── แสดงผล ──
-    if any(v>0 for v in ss.esal_rigid.values()):
-        st.markdown("---")
-        col_r1,col_r2=st.columns(2)
-        with col_r1:
-            st.markdown("**📊 ESAL — Rigid Pavement**")
-            cr=st.columns(len(SLAB_THICKNESSES))
-            for i,(D,lbl) in enumerate(zip(SLAB_THICKNESSES,SLAB_LABELS)):
-                with cr[i]:
-                    st.markdown(f"""<div class="metric-box">
-                        <div class="val">{ss.esal_rigid[D]:,.0f}</div>
-                        <div class="lbl">{lbl}</div>
-                    </div>""",unsafe_allow_html=True)
-        with col_r2:
-            st.markdown("**📊 ESAL — Flexible Pavement**")
-            cf=st.columns(len(sn_list))
-            for i,(sn,v) in enumerate(ss.esal_flex.items()):
-                with cf[i]:
-                    st.markdown(f"""<div class="metric-box">
-                        <div class="val">{v:,.0f}</div>
-                        <div class="lbl">SN {sn}</div>
-                    </div>""",unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
-        # Truck Factor table
-        with st.expander("📋 Truck Factor (EALF/คัน) ที่ Pt={:.1f}".format(pt)):
-            tf_rows=[]
-            for vt in VEHICLE_COLS:
-                row={"ประเภทรถ":f"{VEHICLE_LABELS[vt]} ({vt})"}
-                for D,lbl in zip(SLAB_THICKNESSES,SLAB_LABELS):
-                    row[f"Rigid {lbl}"]=f"{tf_rigid(vt,D,pt):.3f}"
-                for sn in sn_list:
-                    row[f"Flex SN={sn}"]=f"{tf_flex(vt,sn,pt):.3f}"
-                tf_rows.append(row)
-            st.dataframe(pd.DataFrame(tf_rows),use_container_width=True,hide_index=True)
+        with col_inp2:
+            if ss.traffic_df is not None:
+                st.markdown('<div class="card"><h4>📊 ตารางปริมาณจราจร</h4>', unsafe_allow_html=True)
+                st.dataframe(ss.traffic_df.style.format({c: "{:,.0f}" for c in VEHICLE_COLS}),
+                             use_container_width=True, height=280)
+                total_row = {vc: ss.traffic_df[vc].sum() for vc in VEHICLE_COLS}
+                st.markdown(f'<div class="result-info">📊 รวมตลอดอายุออกแบบ: '
+                            + " | ".join(f"<b>{vc}</b>: {total_row[vc]:,.0f}" for vc in VEHICLE_COLS)
+                            + '</div>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                st.info("⬅️ กรอกหรือ Upload ข้อมูลจราจรก่อน")
+
+    # ─── Sub-tab: Rigid ───
+    with sub_esal_rigid:
+        st.markdown('<div class="card"><h4>⚙️ พารามิเตอร์ – Rigid Pavement</h4>', unsafe_allow_html=True)
+        c1,c2,c3,c4 = st.columns(4)
+        with c1: ldf_r = st.number_input("Lane Distribution Factor", value=0.9, step=0.05, min_value=0.1, max_value=1.0, key="ldf_r")
+        with c2: ddf_r = st.number_input("Directional Dist. Factor", value=0.5, step=0.05, min_value=0.1, max_value=1.0, key="ddf_r")
+        with c3: pt_r  = st.number_input("Terminal Serviceability Pt", value=2.5, step=0.1, min_value=1.5, max_value=3.5, key="pt_r")
+        with c4: st.markdown(f"<br><small>Pi (Rigid) = 4.5</small>", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # EALF Table
+        st.markdown('<div class="card"><h4>📋 Truck Factor (EALF/คัน) ตาม Slab Thickness</h4>', unsafe_allow_html=True)
+        tf_rows = []
+        for vt in VEHICLE_COLS:
+            row = {"ประเภทรถ": f"{VEHICLE_LABELS[vt]} ({vt})"}
+            for D, lbl in zip(SLAB_THICKNESSES, SLAB_LABELS):
+                row[lbl] = f"{truck_factor_rigid(vt,D,pt_r):.3f}"
+            tf_rows.append(row)
+        st.dataframe(pd.DataFrame(tf_rows), use_container_width=True, hide_index=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        if st.button("🔄 คำนวณ ESAL Rigid", type="primary", key="calc_r"):
+            if ss.traffic_df is None:
+                st.warning("⚠️ กรุณากรอกข้อมูลจราจรก่อน")
+            else:
+                esal_r = compute_esal_from_df(ss.traffic_df, ldf_r, ddf_r, pt_r, mode="rigid")
+                ss.esal_rigid = esal_r
+                ss.ldf = ldf_r; ss.ddf = ddf_r; ss.pt_rigid = pt_r
+
+                st.markdown("---")
+                st.markdown("#### 📊 ผลการคำนวณ ESAL – Rigid Pavement")
+                cols_m = st.columns(len(SLAB_THICKNESSES))
+                for i, (D, lbl) in enumerate(zip(SLAB_THICKNESSES, SLAB_LABELS)):
+                    with cols_m[i]:
+                        st.markdown(f"""
+                        <div class="metric-box">
+                            <div class="val">{esal_r[D]:,.0f}</div>
+                            <div class="lbl">ESAL – {lbl}</div>
+                        </div>""", unsafe_allow_html=True)
+                st.markdown('<div class="result-info">✅ ค่า ESAL บันทึกแล้ว → ใช้ได้ใน Tab K-Value และ Rigid Design</div>', unsafe_allow_html=True)
+
+        if ss.esal_rigid:
+            st.markdown("**ค่า ESAL Rigid ปัจจุบัน:**")
+            df_er = pd.DataFrame({
+                "Slab": SLAB_LABELS,
+                "ESAL": [f"{ss.esal_rigid.get(D,0):,.0f}" for D in SLAB_THICKNESSES]
+            })
+            st.dataframe(df_er, use_container_width=True, hide_index=True)
+
+    # ─── Sub-tab: Flexible ───
+    with sub_esal_flex:
+        st.markdown('<div class="card"><h4>⚙️ พารามิเตอร์ – Flexible Pavement</h4>', unsafe_allow_html=True)
+        c1,c2,c3,c4 = st.columns(4)
+        with c1: ldf_f = st.number_input("Lane Distribution Factor", value=0.9, step=0.05, min_value=0.1, max_value=1.0, key="ldf_f")
+        with c2: ddf_f = st.number_input("Directional Dist. Factor", value=0.5, step=0.05, min_value=0.1, max_value=1.0, key="ddf_f")
+        with c3: pt_f  = st.number_input("Terminal Serviceability Pt", value=2.5, step=0.1, min_value=1.5, max_value=3.5, key="pt_f")
+        with c4: st.markdown(f"<br><small>Pi (Flexible) = 4.2</small>", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="card"><h4>📐 กำหนด Structure Number (SN)</h4>', unsafe_allow_html=True)
+        sn_cols = st.columns(4)
+        user_sn = []
+        sn_defs = [6.5, 7.1, 7.5, 8.0]
+        for i, col in enumerate(sn_cols):
+            with col:
+                user_sn.append(round(st.number_input(f"SN {i+1}", value=sn_defs[i],
+                                min_value=1.0, max_value=20.0, step=0.1,
+                                key=f"sn_{i}", format="%.1f"), 2))
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="card"><h4>📋 Truck Factor (EALF/คัน) ตาม SN</h4>', unsafe_allow_html=True)
+        tf_rows_f = []
+        for vt in VEHICLE_COLS:
+            row = {"ประเภทรถ": f"{VEHICLE_LABELS[vt]} ({vt})"}
+            for sn in user_sn:
+                row[f"SN={sn}"] = f"{truck_factor_flex(vt,sn,pt_f):.3f}"
+            tf_rows_f.append(row)
+        st.dataframe(pd.DataFrame(tf_rows_f), use_container_width=True, hide_index=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        if st.button("🔄 คำนวณ ESAL Flexible", type="primary", key="calc_f"):
+            if ss.traffic_df is None:
+                st.warning("⚠️ กรุณากรอกข้อมูลจราจรก่อน")
+            else:
+                esal_fv = compute_esal_from_df(ss.traffic_df, ldf_f, ddf_f, pt_f, mode="flex", sn_list=user_sn)
+                ss.esal_flex = esal_fv
+                ss.sn_list = user_sn
+                ss.pt_flex = pt_f
+
+                st.markdown("---")
+                st.markdown("#### 📊 ผลการคำนวณ ESAL – Flexible Pavement")
+                cols_m2 = st.columns(len(user_sn))
+                for i, sn in enumerate(user_sn):
+                    with cols_m2[i]:
+                        st.markdown(f"""
+                        <div class="metric-box">
+                            <div class="val">{esal_fv[sn]:,.0f}</div>
+                            <div class="lbl">ESAL – SN {sn}</div>
+                        </div>""", unsafe_allow_html=True)
+                st.markdown('<div class="result-info">✅ ค่า ESAL บันทึกแล้ว → ใช้ได้ใน Tab Flexible Design</div>', unsafe_allow_html=True)
+
+        if ss.esal_flex:
+            st.markdown("**ค่า ESAL Flexible ปัจจุบัน:**")
+            df_ef = pd.DataFrame({"SN": [f"SN {k}" for k in ss.esal_flex.keys()],
+                                   "ESAL": [f"{v:,.0f}" for v in ss.esal_flex.values()]})
+            st.dataframe(df_ef, use_container_width=True, hide_index=True)
 
 # ══════════════════════════════════════════════
 #  TAB 2: CBR ANALYSIS
 # ══════════════════════════════════════════════
 with tab2:
     st.markdown("### 📊 CBR Analysis — Percentile Method")
-    cl,cr=st.columns([1,1])
-    with cl:
-        st.markdown('<div class="card"><h4>📁 ข้อมูล CBR</h4>',unsafe_allow_html=True)
-        cbr_mode=st.radio("แหล่งข้อมูล",["📁 Upload Excel","✏️ กรอกค่า","📌 ตัวอย่าง"],horizontal=True)
-        cbr_in=None
-        if cbr_mode=="📁 Upload Excel":
-            cxl=st.file_uploader("ไฟล์ Excel (คอลัมน์ CBR)",type=['xlsx'],key="cbr_xl")
-            if cxl:
+
+    col_cbr_l, col_cbr_r = st.columns([1, 1])
+
+    with col_cbr_l:
+        st.markdown('<div class="card"><h4>📁 ข้อมูล CBR</h4>', unsafe_allow_html=True)
+        cbr_mode = st.radio("แหล่งข้อมูล", ["📁 Upload Excel", "✏️ กรอกค่า", "📌 ใช้ข้อมูลตัวอย่าง"], horizontal=True)
+
+        cbr_vals_input = None
+        if cbr_mode == "📁 Upload Excel":
+            cbr_xl = st.file_uploader("ไฟล์ Excel (คอลัมน์ CBR)", type=['xlsx'], key="cbr_xl")
+            if cbr_xl:
                 try:
-                    dc=pd.read_excel(cxl,engine='openpyxl')
-                    col_=next((c for c in dc.columns if 'cbr' in c.lower()),dc.columns[0])
-                    cbr_in=pd.to_numeric(dc[col_],errors='coerce').dropna().tolist()
-                    st.success(f"✅ {len(cbr_in)} ตัวอย่าง")
-                except Exception as e: st.error(str(e))
-        elif cbr_mode=="✏️ กรอกค่า":
-            import re
-            txt=st.text_area("ค่า CBR (%) คั่นด้วย , หรือ Enter",height=100)
-            if txt.strip():
+                    df_cbr = pd.read_excel(cbr_xl, engine='openpyxl')
+                    col_cbr = next((c for c in df_cbr.columns if 'cbr' in c.lower()), df_cbr.columns[0])
+                    cbr_vals_input = pd.to_numeric(df_cbr[col_cbr], errors='coerce').dropna().tolist()
+                    st.success(f"✅ {len(cbr_vals_input)} ตัวอย่าง")
+                except Exception as e:
+                    st.error(str(e))
+        elif cbr_mode == "✏️ กรอกค่า":
+            cbr_txt = st.text_area("กรอกค่า CBR (%) คั่นด้วย , หรือ Enter",
+                                   placeholder="6.5, 7.2, 8.1, 5.3, ...",
+                                   height=120)
+            if cbr_txt.strip():
+                import re
+                parts = re.split(r'[,\n\r\s]+', cbr_txt.strip())
                 try:
-                    cbr_in=[float(x) for x in re.split(r'[,\n\r\s]+',txt.strip()) if x]
-                    st.success(f"✅ {len(cbr_in)} ค่า")
-                except: st.error("กรุณากรอกตัวเลขเท่านั้น")
+                    cbr_vals_input = [float(x) for x in parts if x]
+                    st.success(f"✅ {len(cbr_vals_input)} ค่า")
+                except:
+                    st.error("กรุณากรอกตัวเลขเท่านั้น")
         else:
-            cbr_in=SAMPLE_CBR; st.info(f"📌 {len(SAMPLE_CBR)} ตัวอย่าง")
-        if cbr_in: ss.cbr_values=cbr_in
-        pct_=st.slider("Percentile (%)",50,99,int(ss.cbr_percentile),key="cbr_pct")
-        ss.cbr_percentile=float(pct_)
-        st.markdown('</div>',unsafe_allow_html=True)
+            cbr_vals_input = SAMPLE_CBR
+            st.info(f"📌 ใช้ข้อมูลตัวอย่าง {len(SAMPLE_CBR)} ค่า")
+
+        if cbr_vals_input:
+            ss.cbr_values = cbr_vals_input
+
+        target_pct = st.slider("Percentile ที่ต้องการ (%)", 50, 99, int(ss.cbr_percentile), step=1, key="pct_slider")
+        ss.cbr_percentile = float(target_pct)
+        st.markdown('</div>', unsafe_allow_html=True)
 
         if ss.cbr_values:
-            arr,n,u,upct=calc_percentile(ss.cbr_values)
-            cbd=float(np.interp(pct_,upct[::-1],u[::-1]))
-            st.markdown('<div class="card"><h4>🎯 ผลการวิเคราะห์</h4>',unsafe_allow_html=True)
-            m1,m2,m3=st.columns(3)
-            mr_auto=cbr_to_mr(cbd); k_auto=mr_to_k(mr_auto)
-            with m1: st.markdown(f"""<div class="metric-box">
-                <div class="val">{cbd:.2f}</div><div class="lbl">CBR @ P{pct_:.0f} (%)</div>
-            </div>""",unsafe_allow_html=True)
-            with m2: st.markdown(f"""<div class="metric-box">
-                <div class="val">{mr_auto:,.0f}</div><div class="lbl">Mr (psi)</div>
-            </div>""",unsafe_allow_html=True)
-            with m3: st.markdown(f"""<div class="metric-box">
-                <div class="val">{k_auto:.1f}</div><div class="lbl">k_sub (pci)</div>
-            </div>""",unsafe_allow_html=True)
-            d_cbr=st.number_input("CBR ออกแบบ (ปรับได้)",value=float(round(cbd,1)),
-                                   min_value=0.5,max_value=100.0,step=0.5,key="d_cbr")
-            mr_d=cbr_to_mr(d_cbr); k_d=mr_to_k(mr_d)
-            st.markdown(f'<div class="result-info">CBR={d_cbr:.1f}% → Mr=<b>{mr_d:,.0f} psi</b> → k=<b>{k_d:.1f} pci</b></div>',
-                       unsafe_allow_html=True)
-            if st.button("✅ ใช้ค่านี้",type="primary",key="use_cbr"):
-                ss.cbr_design=d_cbr; ss.mr_psi=mr_d; ss.k_sub_pci=k_d
-                st.success("✅ บันทึกแล้ว → Tab Flexible, K-Value, Rigid")
-            st.markdown('</div>',unsafe_allow_html=True)
+            arr, n, u_cbr, u_pct = calc_percentile_cbr(ss.cbr_values)
+            cbr_at_pct = float(np.interp(target_pct, u_pct[::-1], u_cbr[::-1]))
 
-    with cr:
+            st.markdown('<div class="card"><h4>🎯 ค่า CBR ที่ใช้ออกแบบ</h4>', unsafe_allow_html=True)
+            mr_auto = cbr_to_mr(cbr_at_pct)
+            k_auto  = mr_to_k(mr_auto)
+
+            c_m1, c_m2, c_m3 = st.columns(3)
+            with c_m1:
+                st.markdown(f"""<div class="metric-box">
+                    <div class="val">{cbr_at_pct:.2f}</div>
+                    <div class="lbl">CBR @ P{target_pct:.0f} (%)</div>
+                </div>""", unsafe_allow_html=True)
+            with c_m2:
+                st.markdown(f"""<div class="metric-box">
+                    <div class="val">{mr_auto:,.0f}</div>
+                    <div class="lbl">Mr (psi) = 1500×CBR</div>
+                </div>""", unsafe_allow_html=True)
+            with c_m3:
+                st.markdown(f"""<div class="metric-box">
+                    <div class="val">{k_auto:.1f}</div>
+                    <div class="lbl">k subgrade (pci)</div>
+                </div>""", unsafe_allow_html=True)
+
+            design_cbr_input = st.number_input(
+                "CBR ที่ใช้ออกแบบจริง (ปรับได้)",
+                value=float(round(cbr_at_pct, 1)),
+                min_value=0.5, max_value=100.0, step=0.5,
+                key="design_cbr_input"
+            )
+            mr_design = cbr_to_mr(design_cbr_input)
+            k_design  = mr_to_k(mr_design)
+            st.markdown(f"""
+            <div class="result-info">
+                CBR ออกแบบ = <b>{design_cbr_input:.1f}%</b> →
+                Mr = <b>{mr_design:,.0f} psi</b> →
+                k_subgrade = <b>{k_design:.1f} pci</b>
+            </div>""", unsafe_allow_html=True)
+
+            if st.button("✅ ใช้ค่านี้", type="primary", key="use_cbr"):
+                ss.cbr_design      = design_cbr_input
+                ss.mr_subgrade_psi = mr_design
+                ss.k_subgrade_pci  = k_design
+                st.success("✅ บันทึกค่า CBR/Mr/k แล้ว → ใช้ได้ใน Tab Flexible, K-Value, Rigid Design")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    with col_cbr_r:
         if ss.cbr_values:
-            arr,n,u,upct=calc_percentile(ss.cbr_values)
-            cbd=float(np.interp(pct_,upct[::-1],u[::-1]))
-            st.markdown('<div class="card"><h4>📈 กราฟ Percentile vs CBR</h4>',unsafe_allow_html=True)
-            fig_c=go.Figure()
-            fig_c.add_trace(go.Scatter(x=u,y=upct,mode='lines+markers',name='CBR',
-                line=dict(color='#2E7D32',width=2.5),marker=dict(size=7,symbol='x',color='#1B5E20')))
-            fig_c.add_trace(go.Scatter(x=[0,cbd],y=[pct_,pct_],mode='lines',
-                line=dict(color='red',width=2,dash='dash'),name=f'P{pct_:.0f}%'))
-            fig_c.add_trace(go.Scatter(x=[cbd,cbd],y=[0,pct_],mode='lines',
-                line=dict(color='red',width=2,dash='dash'),name=f'CBR={cbd:.2f}%'))
-            fig_c.add_annotation(x=cbd,y=0,text=f"<b>{cbd:.2f}%</b>",
-                showarrow=True,arrowhead=2,arrowcolor='red',font=dict(size=13,color='red'),ay=40)
-            fig_c.update_layout(
-                xaxis_title="CBR (%)",yaxis_title="Percentile (%)",
-                plot_bgcolor='white',height=360,
-                xaxis=dict(range=[0,max(u)*1.1],gridcolor='#E8F5E9'),
-                yaxis=dict(range=[0,100],gridcolor='#E8F5E9'),
-                margin=dict(l=50,r=20,t=20,b=50),showlegend=False)
-            st.plotly_chart(fig_c,use_container_width=True)
-            st.markdown('</div>',unsafe_allow_html=True)
+            arr, n, u_cbr, u_pct = calc_percentile_cbr(ss.cbr_values)
+            cbr_at_pct = float(np.interp(target_pct, u_pct[::-1], u_cbr[::-1]))
+
+            st.markdown('<div class="card"><h4>📈 กราฟ Percentile vs CBR</h4>', unsafe_allow_html=True)
+            if PLOTLY_OK:
+                fig_cbr = go.Figure()
+                fig_cbr.add_trace(go.Scatter(
+                    x=u_cbr, y=u_pct, mode='lines+markers', name='CBR Distribution',
+                    line=dict(color='#2E7D32', width=2.5),
+                    marker=dict(size=7, symbol='x', color='#1B5E20')
+                ))
+                fig_cbr.add_trace(go.Scatter(
+                    x=[0, cbr_at_pct], y=[target_pct, target_pct],
+                    mode='lines', name=f'P{target_pct:.0f}%',
+                    line=dict(color='red', width=2, dash='dash')
+                ))
+                fig_cbr.add_trace(go.Scatter(
+                    x=[cbr_at_pct, cbr_at_pct], y=[0, target_pct],
+                    mode='lines', name=f'CBR={cbr_at_pct:.2f}%',
+                    line=dict(color='red', width=2, dash='dash')
+                ))
+                fig_cbr.add_annotation(
+                    x=cbr_at_pct, y=0,
+                    text=f"<b>{cbr_at_pct:.2f}%</b>",
+                    showarrow=True, arrowhead=2, arrowcolor='red',
+                    font=dict(size=14, color='red'), ay=40
+                )
+                fig_cbr.update_layout(
+                    xaxis_title="CBR (%)", yaxis_title="Percentile (%)",
+                    plot_bgcolor='white', height=380,
+                    xaxis=dict(range=[0, max(u_cbr)*1.1], gridcolor='#E8F5E9'),
+                    yaxis=dict(range=[0, 100], gridcolor='#E8F5E9'),
+                    legend=dict(bgcolor='rgba(255,255,255,0.8)', bordercolor='#C8E6C9'),
+                    margin=dict(l=50, r=30, t=30, b=50)
+                )
+                st.plotly_chart(fig_cbr, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
             # Stats
-            st.markdown('<div class="card"><h4>📋 สถิติ</h4>',unsafe_allow_html=True)
-            s1,s2,s3,s4=st.columns(4)
-            with s1: st.metric("n",n)
-            with s2: st.metric("Min",f"{np.min(ss.cbr_values):.2f}%")
-            with s3: st.metric("Max",f"{np.max(ss.cbr_values):.2f}%")
-            with s4: st.metric("Mean",f"{np.mean(ss.cbr_values):.2f}%")
-            st.markdown('</div>',unsafe_allow_html=True)
+            st.markdown('<div class="card"><h4>📋 สถิติ CBR</h4>', unsafe_allow_html=True)
+            c1,c2,c3,c4 = st.columns(4)
+            with c1: st.metric("n", n)
+            with c2: st.metric("Min", f"{np.min(ss.cbr_values):.2f}%")
+            with c3: st.metric("Max", f"{np.max(ss.cbr_values):.2f}%")
+            with c4: st.metric("Mean", f"{np.mean(ss.cbr_values):.2f}%")
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════
 #  TAB 3: FLEXIBLE DESIGN
 # ══════════════════════════════════════════════
 with tab3:
     st.markdown("### 🔧 Flexible Pavement Design — AASHTO 1993")
-    fl,fr=st.columns([1,1])
-    with fl:
-        # Auto-fill params
-        st.markdown('<div class="card"><h4>📥 พารามิเตอร์ (ดึงอัตโนมัติ)</h4>',unsafe_allow_html=True)
-        st.markdown(badge('esal_flex','ESAL Flex'),unsafe_allow_html=True)
-        st.markdown(badge('mr_psi','Mr (CBR)'),unsafe_allow_html=True)
-        st.markdown(f"**R0 = {ss.r0}%** (ZR = {ZR_MAP[ss.r0]}) | **Pt = {ss.pt}**")
-        # ESAL selector
-        if ss.esal_flex:
-            sn_keys=list(ss.esal_flex.keys())
-            sel=st.selectbox("เลือก SN",range(len(sn_keys)),
-                format_func=lambda i:f"SN {sn_keys[i]} → ESAL={ss.esal_flex[sn_keys[i]]:,.0f}",
-                key="f3_sn")
-            d_esal=ss.esal_flex[sn_keys[sel]]
-            st.markdown(f'<div class="result-info">Design ESAL = <b>{d_esal:,.0f}</b></div>',
-                       unsafe_allow_html=True)
-        else:
-            st.warning("⚠️ คำนวณ ESAL ใน Tab 1 ก่อน")
-            d_esal=st.number_input("Design ESAL",value=0,step=100000,key="f3_esal_m")
-        # Mr
-        mr_f=st.number_input("Mr (psi)",value=float(ss.mr_psi) if ss.mr_psi else 4500.0,
-                              step=500.0,min_value=500.0,key="f3_mr")
-        st.markdown('</div>',unsafe_allow_html=True)
-        # Design params
-        st.markdown('<div class="card"><h4>⚙️ พารามิเตอร์ Flexible</h4>',unsafe_allow_html=True)
-        fp1,fp2=st.columns(2)
-        with fp1:
-            pi_f=st.number_input("Pi (Flexible)",value=4.2,step=0.1,key="f3_pi")
-        with fp2:
-            so_f=st.number_input("So (Flexible)",value=0.45,step=0.01,
-                                  min_value=0.3,max_value=0.6,key="f3_so")
-        st.markdown('</div>',unsafe_allow_html=True)
 
-    with fr:
-        st.markdown('<div class="card"><h4>🔩 Layer Design</h4>',unsafe_allow_html=True)
-        # Header
-        hc=st.columns([3.5,1.2,0.8,0.8,0.9,1.1])
-        for txt,col in zip(["**วัสดุ**","**หนา(cm)**","**ai**","**mi**","**SNi**","**ΣSNi**"],hc):
+    col_fl, col_fr = st.columns([1, 1])
+
+    with col_fl:
+        # Auto-fill from session
+        st.markdown('<div class="card"><h4>📥 Design ESAL</h4>', unsafe_allow_html=True)
+        if ss.esal_flex:
+            sn_keys = list(ss.esal_flex.keys())
+            sel_idx = st.selectbox("เลือก SN", range(len(sn_keys)),
+                                   format_func=lambda i: f"SN {sn_keys[i]}  →  ESAL = {ss.esal_flex[sn_keys[i]]:,.0f}",
+                                   key="flex_sn_sel")
+            design_esal_f = ss.esal_flex[sn_keys[sel_idx]]
+            st.markdown(f'<div class="result-info">📊 Design ESAL = <b>{design_esal_f:,.0f}</b></div>', unsafe_allow_html=True)
+        else:
+            st.warning("⚠️ ยังไม่มีค่า ESAL — คำนวณใน Tab 1 ก่อน หรือกรอกเอง")
+            design_esal_f = st.number_input("Design ESAL (กรอกเอง)", value=0, step=100000, key="flex_esal_manual")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="card"><h4>🌍 Subgrade</h4>', unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        with c1:
+            cbr_fl = st.number_input("CBR (%)", value=float(ss.cbr_design) if ss.cbr_design else 3.0,
+                                     step=0.5, min_value=0.5, key="cbr_fl")
+        with c2:
+            mr_fl_auto = cbr_to_mr(cbr_fl)
+            mr_fl = st.number_input("Mr (psi) [อัตโนมัติ]", value=float(ss.mr_subgrade_psi) if ss.mr_subgrade_psi else mr_fl_auto,
+                                    step=500.0, min_value=500.0, key="mr_fl")
+        st.markdown(f"Mr = **{mr_fl:,.0f} psi**  ({mr_fl/145.038:.1f} MPa)")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="card"><h4>⚙️ Design Parameters</h4>', unsafe_allow_html=True)
+        c1,c2,c3,c4 = st.columns(4)
+        with c1:
+            r0_fl = st.selectbox("Reliability R0 (%)", list(ZR_MAP.keys()), index=10, key="r0_fl")
+            st.caption(f"ZR = {ZR_MAP[r0_fl]}")
+        with c2: so_fl = st.number_input("So", value=0.45, step=0.01, min_value=0.3, max_value=0.6, key="so_fl")
+        with c3: pi_fl = st.number_input("Pi", value=4.2, step=0.1, key="pi_fl")
+        with c4: pt_fl2 = st.number_input("Pt", value=2.5, step=0.1, key="pt_fl2")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with col_fr:
+        st.markdown('<div class="card"><h4>🔩 Layer Design</h4>', unsafe_allow_html=True)
+        hcols = st.columns([3, 1.5, 0.8, 0.8, 0.9, 1.1])
+        for txt, col in zip(["**วัสดุ**","**หนา(cm)**","**ai**","**mi**","**SNi**","**ΣSNi**"], hcols):
             col.markdown(txt)
 
-        mat_opts=list(FLEX_MATERIALS.keys())
-        layers_f=[]; cum_sn=0.0
+        mat_options = list(FLEX_LAYER_MATERIALS.keys())
+        layer_results = []
+        cum_sn = 0.0
 
         for li in range(6):
-            lc0,lc1=st.columns([3.5,1.2])
+            lc0, lc1 = st.columns([3, 1.5])
             with lc0:
-                mat=st.selectbox(f"L{li+1}",mat_opts,key=f"f3m_{li}",label_visibility="collapsed")
+                mat_f = st.selectbox(f"L{li+1}", mat_options, key=f"fmat_{li}", label_visibility="collapsed")
             with lc1:
-                h=st.number_input("cm",value=0,step=1,min_value=0,
-                                   key=f"f3h_{li}",label_visibility="collapsed")
-            if mat!="None" and h>0:
-                ai,mi=FLEX_MATERIALS[mat]
-                h_in=h/2.54; sni=ai*h_in*mi; cum_sn+=sni
-                layers_f.append({'layer':li+1,'mat':mat,'h':h,'ai':ai,'mi':mi,
-                                 'sni':round(sni,3),'cum_sn':round(cum_sn,3)})
-                # แถวผล — อยู่ในแถวเดียวกัน
-                rc=st.columns([3.5,1.2,0.8,0.8,0.9,1.1])
-                rc[0].markdown(f'<div class="layer-row">{h} cm</div>',unsafe_allow_html=True)
-                rc[1].markdown(f'<div class="layer-row">{h} cm</div>',unsafe_allow_html=True)
-                rc[2].markdown(f'<div class="layer-row">{ai:.2f}</div>',unsafe_allow_html=True)
-                rc[3].markdown(f'<div class="layer-row">{mi:.1f}</div>',unsafe_allow_html=True)
-                rc[4].markdown(f'<div class="layer-row">{sni:.3f}</div>',unsafe_allow_html=True)
-                rc[5].markdown(f'<div class="layer-row"><b>{cum_sn:.3f}</b></div>',unsafe_allow_html=True)
+                h_f = st.number_input("cm", value=0, step=1, min_value=0, key=f"fh_{li}", label_visibility="collapsed")
 
-        st.markdown(f'<div class="result-info">ΣSN Provided = <b>{cum_sn:.3f}</b></div>',
-                   unsafe_allow_html=True)
-        st.markdown('</div>',unsafe_allow_html=True)
+            if mat_f != "None" and h_f > 0:
+                ai, mi = FLEX_LAYER_MATERIALS[mat_f]
+                h_in   = h_f / 2.54
+                sn_i   = ai * h_in * mi
+                cum_sn += sn_i
+                layer_results.append({
+                    'layer': li+1, 'material': mat_f,
+                    'h_cm': h_f, 'ai': ai, 'mi': mi,
+                    'sni': round(sn_i,3), 'cum_sn': round(cum_sn,3)
+                })
+                _, d1,d2,d3,d4,d5 = st.columns([3, 1.5, 0.8, 0.8, 0.9, 1.1])
+                d1.markdown(f"`{h_f} cm`"); d2.markdown(f"`{ai:.2f}`")
+                d3.markdown(f"`{mi:.1f}`"); d4.markdown(f"`{sn_i:.3f}`")
+                d5.markdown(f"**`{cum_sn:.3f}`**")
 
-        if st.button("✅ Design Check",type="primary",key="f3_check"):
-            if d_esal<=0:
-                st.warning("⚠️ ใส่ Design ESAL ก่อน")
+        st.markdown(f"""<div class="result-info">
+            ΣSN Provided = <b>{cum_sn:.3f}</b>
+        </div>""", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        if st.button("✅ Design Check", type="primary", key="flex_check"):
+            if design_esal_f <= 0:
+                st.warning("⚠️ กรุณาใส่ Design ESAL")
             else:
-                zr_f=ZR_MAP[ss.r0]
-                sn_req=sn_required(d_esal,zr_f,so_f,pi_f,ss.pt,mr_f)
+                sn_req = aashto_sn_required(design_esal_f, ZR_MAP[r0_fl], so_fl, pi_fl, pt_fl2, mr_fl)
                 if sn_req:
-                    passed=cum_sn>=sn_req; margin=cum_sn-sn_req
-                    css="result-pass" if passed else "result-fail"
-                    chk="✅ PASS" if passed else "❌ FAIL"
-                    c1,c2,c3=st.columns(3)
-                    with c1: st.markdown(f"""<div class="metric-box">
-                        <div class="val">{cum_sn:.3f}</div><div class="lbl">SN Provided</div></div>""",unsafe_allow_html=True)
-                    with c2: st.markdown(f"""<div class="metric-box">
-                        <div class="val">{sn_req:.3f}</div><div class="lbl">SN Required</div></div>""",unsafe_allow_html=True)
-                    with c3:
-                        clr='#1B5E20' if passed else '#B71C1C'
-                        st.markdown(f"""<div class="metric-box">
-                        <div class="val" style="color:{clr}">{margin:+.3f}</div>
-                        <div class="lbl">Safety Margin</div></div>""",unsafe_allow_html=True)
-                    st.markdown(f'<div class="{css}" style="margin-top:0.7rem;">'
-                                f'<b>{chk}</b> — SN Req={sn_req:.3f} | SN Prov={cum_sn:.3f}</div>',
-                               unsafe_allow_html=True)
-                    ss.flex_results={'esal':d_esal,'sn_req':sn_req,'sn_prov':cum_sn,
-                                     'pass':passed,'layers':layers_f,'mr_psi':mr_f}
+                    passed = cum_sn >= sn_req
+                    margin = cum_sn - sn_req
+                    css    = "result-pass" if passed else "result-fail"
+                    chk    = "✅ PASS" if passed else "❌ FAIL"
+
+                    c1,c2,c3 = st.columns(3)
+                    with c1: st.markdown(f"""<div class="metric-box"><div class="val">{cum_sn:.3f}</div><div class="lbl">SN Provided</div></div>""", unsafe_allow_html=True)
+                    with c2: st.markdown(f"""<div class="metric-box"><div class="val">{sn_req:.3f}</div><div class="lbl">SN Required</div></div>""", unsafe_allow_html=True)
+                    with c3: st.markdown(f"""<div class="metric-box"><div class="val" style="color:{'#1B5E20' if passed else '#B71C1C'}">{margin:+.3f}</div><div class="lbl">Safety Margin</div></div>""", unsafe_allow_html=True)
+
+                    st.markdown(f'<div class="{css}" style="margin-top:0.8rem;font-size:1.05rem">{chk} — SN Required = {sn_req:.3f} | SN Provided = {cum_sn:.3f}</div>', unsafe_allow_html=True)
+
+                    ss.flex_results = {
+                        'esal': design_esal_f, 'sn_req': sn_req,
+                        'sn_prov': cum_sn, 'pass': passed,
+                        'layers': layer_results,
+                        'mr_psi': mr_fl, 'cbr': cbr_fl,
+                    }
+                    if layer_results:
+                        st.dataframe(pd.DataFrame(layer_results), use_container_width=True, hide_index=True)
                 else:
-                    st.error("ไม่สามารถคำนวณ SN Required ได้")
+                    st.error("ไม่สามารถคำนวณ SN Required ได้ — ตรวจสอบ ESAL และ Mr")
 
 # ══════════════════════════════════════════════
-#  TAB 4: K-VALUE NOMOGRAPH
+#  TAB 4: K-VALUE NOMOGRAPH (Upload Image + Slider)
 # ══════════════════════════════════════════════
 with tab4:
     st.markdown("### 📐 K-Value Nomograph — AASHTO 1993")
-    sub_k,sub_ls=st.tabs(["📊 Composite k∞ (Fig.3.3)","📉 Loss of Support (Fig.3.4)"])
+    st.markdown("""
+    <div class="result-info">
+        💡 <b>วิธีใช้:</b> Upload รูป Nomograph จาก AASHTO 1993 แล้วใช้ Slider วาดเส้นอ่านค่า
+        → Tab k∞ ใช้ <b>Fig.3.3</b> | Tab Loss of Support ใช้ <b>Fig.3.4</b>
+    </div>
+    """, unsafe_allow_html=True)
 
-    LS_PRESETS={0.0:(138,715,753,84),0.5:(129,728,908,0),1.0:(150,718,903,84),
-                1.5:(153,721,928,138),2.0:(164,718,929,220),3.0:(212,719,929,328)}
+    sub_kinf, sub_ls = st.tabs(["📊 Composite k∞ (Fig.3.3)", "📉 Loss of Support (Fig.3.4)"])
 
-    with sub_k:
-        up1=st.file_uploader("📂 Upload Figure 3.3",type=['png','jpg','jpeg'],key='up_k')
-        if up1: raw1=up1.read(); ss['img1_original']=raw1
-        elif ss.get('img1_original'): raw1=ss['img1_original']
-        else: raw1=None
+    # ─────────────────────────────────────────
+    #  Sub-tab A: Composite k∞
+    # ─────────────────────────────────────────
+    with sub_kinf:
+        from PIL import Image as PILImage, ImageDraw as PILDraw
 
-        if raw1:
-            img1=PILImage.open(io.BytesIO(raw1)).convert("RGB")
-            w1,h1=img1.size; d1=PILDraw.Draw(img1.copy())
-            img1_draw=img1.copy(); draw1=PILDraw.Draw(img1_draw)
-            kc1,ki1=st.columns([1,2])
-            with kc1:
-                st.markdown('<div class="card"><h4>⚙️ ปรับเส้นอ่านค่า</h4>',unsafe_allow_html=True)
-                with st.expander("1. Turning Line (เขียว)",expanded=True):
-                    gx1=st.slider("X เริ่ม",0,w1,ss.get('gx1',int(w1*0.40)),key="gx1")
-                    gy1=st.slider("Y เริ่ม",0,h1,ss.get('gy1',int(h1*0.45)),key="gy1")
-                    gx2=st.slider("X จบ",0,w1,ss.get('gx2',int(w1*0.45)),key="gx2")
-                    gy2=st.slider("Y จบ",0,h1,ss.get('gy2',int(h1*0.52)),key="gy2")
-                    draw1.line([(gx1,gy1),(gx2,gy2)],fill="green",width=5)
-                    slope_g=(gy2-gy1)/(gx2-gx1) if gx2!=gx1 else 0
-                with st.expander("2. พารามิเตอร์ (ส้ม/แดง/น้ำเงิน)",expanded=True):
-                    sx =st.slider("ตำแหน่งแกน D_SB",0,w1,ss.get('s1_sx',int(w1*0.15)),key="s1_sx")
-                    sey=st.slider("ระดับ ESB (บน)",0,h1,ss.get('s1_sy_esb',int(h1*0.10)),key="s1_sy_esb")
-                    smy=st.slider("ระดับ MR (ล่าง)",0,h1,ss.get('s1_sy_mr',int(h1*0.55)),key="s1_sy_mr")
-                    cx=int(gx1+(smy-gy1)/slope_g) if slope_g!=0 else gx1
-                draw_arrow(draw1,(sx,sey),(cx,sey),"orange")
-                draw_arrow(draw1,(sx,sey),(sx,smy),"red")
-                draw_arrow(draw1,(sx,smy),(cx,smy),"darkblue")
-                draw_arrow(draw1,(cx,smy),(cx,sey),"blue")
-                r_=8; draw1.ellipse([(cx-r_,smy-r_),(cx+r_,smy+r_)],fill="black",outline="white")
-
-                st.markdown('</div>',unsafe_allow_html=True)
-                st.markdown('<div class="card"><h4>📝 บันทึกค่า</h4>',unsafe_allow_html=True)
-                # Auto-fill จาก session
-                mr_k =st.number_input("MR (psi)",value=int(ss.mr_psi) if ss.mr_psi else 7000,step=500,key="nomo_mr")
-                esb_k=st.number_input("ESB (psi)",value=int(ss.nomo_esb),step=1000,key="nomo_esb")
-                dsb_k=st.number_input("DSB (in)",value=float(ss.nomo_dsb),step=0.5,key="nomo_dsb")
-                k_inf_read=st.number_input("k∞ ที่อ่านได้ (pci)",value=int(ss.get('nomo_k_inf',400)),step=10,key="nomo_k_inf")
-                if ss.mr_psi: st.markdown(f'<div class="badge-ready">📊 MR จาก CBR={ss.mr_psi:,.0f} psi</div>',unsafe_allow_html=True)
-                if ss.nomo_esb: st.markdown(f'<div class="badge-ready">📐 ESB จาก Rigid={ss.nomo_esb:,} psi</div>',unsafe_allow_html=True)
-                if ss.nomo_dsb: st.markdown(f'<div class="badge-ready">📏 DSB จาก Rigid={ss.nomo_dsb:.1f} in</div>',unsafe_allow_html=True)
-                if st.button("✅ บันทึก k∞",type="primary",key="save_k"):
-                    ss.k_inf=float(k_inf_read)
-                    buf1=io.BytesIO(); img1_draw.save(buf1,format='PNG')
-                    ss['nomograph_img_k']=buf1.getvalue()
-                    ss['img1_original']=raw1
-                    st.success(f"k∞ = {k_inf_read} pci → Tab Loss of Support & Rigid")
-                st.markdown('</div>',unsafe_allow_html=True)
-            with ki1:
-                if ss.k_inf>0: st.markdown(f'<div class="result-pass">k∞ = <b>{ss.k_inf:.0f} pci</b></div>',unsafe_allow_html=True)
-                buf1b=io.BytesIO(); img1_draw.save(buf1b,format='PNG')
-                ss['nomograph_img_k']=buf1b.getvalue()
-                st.image(img1_draw,caption="Composite k∞ Nomograph (AASHTO 1993 Fig.3.3)",use_container_width=True)
+        # Upload หรือโหลดจาก session
+        uploaded_k = st.file_uploader(
+            "📂 Upload ภาพ Figure 3.3 (Composite k∞)",
+            type=['png','jpg','jpeg'], key='uploader_kinf'
+        )
+        if uploaded_k is not None:
+            raw_k = uploaded_k.read()
+            ss['img1_original'] = raw_k
+        elif ss.get('img1_original'):
+            raw_k = ss['img1_original']
         else:
-            st.markdown('<div class="result-warn">👆 Upload รูป <b>Figure 3.3</b> หรือกรอก k∞ โดยตรง</div>',unsafe_allow_html=True)
-            st.markdown('<div class="card"><h4>📝 กรอก k∞ โดยตรง</h4>',unsafe_allow_html=True)
-            k_m=st.number_input("k∞ (pci)",value=float(ss.k_inf) if ss.k_inf else 200.0,step=10.0,key="k_manual")
-            if st.button("✅ ใช้ค่านี้",key="use_k_m"):
-                ss.k_inf=k_m; st.success(f"k∞={k_m:.0f} pci")
-            st.markdown('</div>',unsafe_allow_html=True)
+            raw_k = None
 
+        if raw_k:
+            img1 = PILImage.open(io.BytesIO(raw_k)).convert("RGB")
+            w1, h1 = img1.size
+            img1_draw = img1.copy()
+            draw1 = PILDraw.Draw(img1_draw)
+
+            col_ctrl1, col_img1 = st.columns([1, 2])
+
+            with col_ctrl1:
+                st.markdown('<div class="card"><h4>⚙️ ปรับเส้นอ่านค่า</h4>', unsafe_allow_html=True)
+
+                with st.expander("1. เส้น Turning Line (เขียว)", expanded=True):
+                    gx1 = st.slider("X เริ่ม", 0, w1, ss.get('gx1', int(w1*0.40)), key="gx1")
+                    gy1 = st.slider("Y เริ่ม", 0, h1, ss.get('gy1', int(h1*0.45)), key="gy1")
+                    gx2 = st.slider("X จบ",   0, w1, ss.get('gx2', int(w1*0.45)), key="gx2")
+                    gy2 = st.slider("Y จบ",   0, h1, ss.get('gy2', int(h1*0.52)), key="gy2")
+                    draw1.line([(gx1,gy1),(gx2,gy2)], fill="green", width=5)
+                    slope_g = (gy2-gy1)/(gx2-gx1) if (gx2-gx1) != 0 else 0
+
+                with st.expander("2. พารามิเตอร์ (ส้ม/แดง/น้ำเงิน)", expanded=True):
+                    start_x   = st.slider("ตำแหน่งแกน D_SB (ซ้าย)", 0, w1, ss.get('s1_sx',   int(w1*0.15)), key="s1_sx")
+                    stop_y_esb= st.slider("ระดับค่า ESB (บน)",       0, h1, ss.get('s1_sy_esb',int(h1*0.10)), key="s1_sy_esb")
+                    stop_y_mr = st.slider("ระดับค่า MR (ล่าง)",      0, h1, ss.get('s1_sy_mr', int(h1*0.55)), key="s1_sy_mr")
+                    constrained_x = int(gx1 + (stop_y_mr - gy1) / slope_g) if slope_g != 0 else gx1
+
+                # วาดลูกศร
+                def _arrow(drw, start, end, color, lw=4, arrow=14):
+                    drw.line([start, end], fill=color, width=lw)
+                    dx = end[0]-start[0]; dy = end[1]-start[1]
+                    L = math.sqrt(dx*dx+dy*dy)
+                    if L > 0:
+                        dx/=L; dy/=L; px=-dy; py=dx
+                        bx=end[0]-arrow*dx; by=end[1]-arrow*dy
+                        drw.polygon([(end[0],end[1]),(int(bx+arrow*0.5*px),int(by+arrow*0.5*py)),
+                                     (int(bx-arrow*0.5*px),int(by-arrow*0.5*py))], fill=color)
+
+                _arrow(draw1, (start_x, stop_y_esb), (constrained_x, stop_y_esb), "orange")
+                _arrow(draw1, (start_x, stop_y_esb), (start_x, stop_y_mr),         "red")
+                _arrow(draw1, (start_x, stop_y_mr),  (constrained_x, stop_y_mr),   "darkblue")
+                _arrow(draw1, (constrained_x, stop_y_mr), (constrained_x, stop_y_esb), "blue")
+                r=8
+                draw1.ellipse([(constrained_x-r,stop_y_mr-r),(constrained_x+r,stop_y_mr+r)],
+                               fill="black", outline="white")
+
+                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('<div class="card"><h4>📝 บันทึกค่าที่อ่านได้</h4>', unsafe_allow_html=True)
+
+                # ── auto-fill จาก session state ──
+                mr_auto_k  = int(ss.mr_subgrade_psi) if ss.mr_subgrade_psi else 7000
+                esb_auto_k = int(ss.get('nomo_esb', 50000))
+                dsb_auto_k = float(ss.get('nomo_dsb', 6.0))
+
+                if ss.mr_subgrade_psi:
+                    st.markdown(f'<div class="badge-ready">📊 MR จาก Tab CBR = {mr_auto_k:,} psi</div>', unsafe_allow_html=True)
+                if ss.get('nomo_esb'):
+                    st.markdown(f'<div class="badge-ready">📐 ESB จาก Rigid Layers = {esb_auto_k:,} psi</div>', unsafe_allow_html=True)
+                if ss.get('nomo_dsb'):
+                    st.markdown(f'<div class="badge-ready">📏 DSB จาก Rigid Layers = {dsb_auto_k:.1f} in</div>', unsafe_allow_html=True)
+
+                mr_val  = st.number_input("MR (psi) — แก้ไขได้",     value=mr_auto_k,  step=500,  key="nomo_mr")
+                esb_val = st.number_input("ESB (psi) — แก้ไขได้",    value=esb_auto_k, step=1000, key="nomo_esb")
+                dsb_val = st.number_input("DSB (inches) — แก้ไขได้", value=dsb_auto_k, step=0.5,  key="nomo_dsb")
+                k_inf_read = st.number_input("k∞ ที่อ่านได้ (pci)",  value=int(ss.get('nomo_k_inf', 400)), step=10, key="nomo_k_inf")
+
+                if st.button("✅ บันทึก k∞", type="primary", key="save_kinf"):
+                    ss.k_inf = float(k_inf_read)
+                    buf1 = io.BytesIO()
+                    img1_draw.save(buf1, format='PNG')
+                    ss['nomograph_img_k'] = buf1.getvalue()
+                    ss['img1_original']   = raw_k
+                    st.markdown(f'<div class="result-pass">k∞ = <b>{k_inf_read} pci</b> บันทึกแล้ว → ใช้ใน Tab Loss of Support และ Rigid Design</div>', unsafe_allow_html=True)
+
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            with col_img1:
+                if ss.get('k_inf'):
+                    st.markdown(f'<div class="result-pass" style="margin-bottom:0.5rem;">k∞ ปัจจุบัน = <b>{ss.k_inf:.0f} pci</b></div>', unsafe_allow_html=True)
+                st.image(img1_draw, caption="Composite k∞ Nomograph (AASHTO 1993 Fig.3.3)", use_container_width=True)
+
+                # Save annotated image
+                buf1b = io.BytesIO()
+                img1_draw.save(buf1b, format='PNG')
+                ss['nomograph_img_k'] = buf1b.getvalue()
+        else:
+            st.markdown("""
+            <div class="result-warn">
+                👆 กรุณา Upload รูป <b>Figure 3.3</b> จาก AASHTO 1993 Guide<br>
+                <small>รองรับ PNG, JPG, JPEG</small>
+            </div>
+            """, unsafe_allow_html=True)
+            # Fallback: กรอก k∞ ตรงๆ
+            st.markdown('<div class="card"><h4>📝 หรือกรอกค่า k∞ โดยตรง</h4>', unsafe_allow_html=True)
+            k_inf_manual = st.number_input("k∞ (pci)", value=float(ss.k_inf) if ss.k_inf else 200.0,
+                                            step=10.0, min_value=10.0, key="k_inf_manual")
+            if st.button("✅ ใช้ค่านี้", key="use_kinf_manual"):
+                ss.k_inf = k_inf_manual
+                st.success(f"✅ k∞ = {k_inf_manual:.0f} pci บันทึกแล้ว")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    # ─────────────────────────────────────────
+    #  Sub-tab B: Loss of Support
+    # ─────────────────────────────────────────
     with sub_ls:
-        st.markdown(f'<div class="result-info">k∞ = <b>{ss.k_inf:.0f} pci</b></div>',unsafe_allow_html=True)
-        up2=st.file_uploader("📂 Upload Figure 3.4",type=['png','jpg','jpeg'],key='up_ls')
-        if up2: raw2=up2.read(); ss['img2_original']=raw2
-        elif ss.get('img2_original'): raw2=ss['img2_original']
-        else: raw2=None
+        from PIL import Image as PILImage, ImageDraw as PILDraw
 
-        if raw2:
-            img2=PILImage.open(io.BytesIO(raw2)).convert("RGB")
-            w2,h2=img2.size; img2_draw=img2.copy(); draw2=PILDraw.Draw(img2_draw)
-            lc2,li2=st.columns([1,2])
-            with lc2:
-                st.markdown('<div class="card"><h4>⚙️ กำหนดเส้น LS</h4>',unsafe_allow_html=True)
-                ls_opts=[0.0,0.5,1.0,1.5,2.0,3.0]
-                cur_ls=ss.get('ls_select_box',1.0)
-                ls_sel=st.selectbox("ค่า LS",ls_opts,
-                                    index=ls_opts.index(cur_ls) if cur_ls in ls_opts else 2,
-                                    key="ls_select_box")
-                if ss.get('_last_ls')!=ls_sel:
-                    ss['_last_ls']=ls_sel
-                    c_=LS_PRESETS.get(ls_sel,(150,718,903,84))
-                    ss['_ls_x1'],ss['_ls_y1']=c_[0],c_[1]
-                    ss['_ls_x2'],ss['_ls_y2']=c_[2],c_[3]
-                with st.expander("ปรับละเอียด",expanded=False):
-                    lx1=st.slider("เริ่ม X",-100,w2+100,ss.get('_ls_x1',150),key="_ls_x1")
-                    ly1=st.slider("เริ่ม Y",-100,h2+100,ss.get('_ls_y1',718),key="_ls_y1")
-                    lx2=st.slider("จบ X",-100,w2+100,ss.get('_ls_x2',903),key="_ls_x2")
-                    ly2=st.slider("จบ Y",-100,h2+100,ss.get('_ls_y2',84),key="_ls_y2")
-                draw2.line([(lx1,ly1),(lx2,ly2)],fill="red",width=6)
-                m_r=(ly2-ly1)/(lx2-lx1) if lx2!=lx1 else None
-                c_r=ly1-m_r*lx1 if m_r else 0
-                with st.expander("ตำแหน่งแกน",expanded=True):
-                    ax_l=st.number_input("แกน Y ซ้าย",value=ss.get('axis_left',100),step=5,key="axis_left")
-                    ax_b=st.number_input("แกน X ล่าง",value=ss.get('axis_bottom',h2-50),step=5,key="axis_bottom")
-                st.caption(f"k∞ = {ss.k_inf:.0f} pci")
-                kpx=st.slider("ตำแหน่ง k บนแกน X",0,w2,ss.get('k_pos_x',w2//2),key="k_pos_x")
-                iy=int(m_r*kpx+c_r) if m_r else h2//2
-                draw2.line([(kpx,ax_b),(kpx,iy)],fill="blue",width=5)
-                draw_arrow(draw2,(kpx,iy),(int(ax_l),iy),"blue")
-                draw2.ellipse([(kpx-8,iy-8),(kpx+8,iy+8)],fill="black",outline="white",width=2)
-                st.markdown('</div>',unsafe_allow_html=True)
-                st.markdown('<div class="card"><h4>📝 บันทึก k_eff</h4>',unsafe_allow_html=True)
-                kc_val=st.number_input("k_eff Corrected (pci)",
-                    value=int(ss.get('k_corrected',max(10,ss.k_inf-100)) if ss.k_inf else 200),
-                    step=10,min_value=10,key="k_corr_input")
-                if kc_val>ss.k_inf>0:
-                    st.warning(f"⚠️ k_eff >{ss.k_inf:.0f} pci (k∞)")
-                if st.button("✅ บันทึก k_eff",type="primary",key="save_keff"):
-                    ss.k_corrected=float(kc_val); ss.ls_value=ls_sel
-                    buf2=io.BytesIO(); img2_draw.save(buf2,format='PNG')
-                    ss['nomograph_img_ls']=buf2.getvalue()
-                    ss['img2_original']=raw2
-                    st.success(f"k_eff={kc_val} pci → Tab Rigid Design")
-                st.markdown('</div>',unsafe_allow_html=True)
-            with li2:
-                if ss.k_corrected>0: st.markdown(f'<div class="result-pass">k_eff = <b>{ss.k_corrected:.0f} pci</b> (LS={ls_sel})</div>',unsafe_allow_html=True)
-                buf2b=io.BytesIO(); img2_draw.save(buf2b,format='PNG')
-                ss['nomograph_img_ls']=buf2b.getvalue()
-                st.image(img2_draw,caption=f"Loss of Support (LS={ls_sel})",use_container_width=True)
+        st.markdown(f'<div class="result-info">k∞ จาก Tab k∞ = <b>{ss.k_inf:.0f} pci</b></div>', unsafe_allow_html=True)
+
+        uploaded_ls = st.file_uploader(
+            "📂 Upload ภาพ Figure 3.4 (Loss of Support)",
+            type=['png','jpg','jpeg'], key='uploader_ls'
+        )
+        if uploaded_ls is not None:
+            raw_ls = uploaded_ls.read()
+            ss['img2_original'] = raw_ls
+        elif ss.get('img2_original'):
+            raw_ls = ss['img2_original']
         else:
-            st.markdown('<div class="result-warn">👆 Upload รูป <b>Figure 3.4</b> หรือกรอก k_eff โดยตรง</div>',unsafe_allow_html=True)
-            st.markdown('<div class="card"><h4>📝 กรอก k_eff โดยตรง</h4>',unsafe_allow_html=True)
-            ls_m=st.select_slider("LS",options=[0.0,0.5,1.0,1.5,2.0,3.0],
-                                   value=ss.ls_value if ss.ls_value in [0.0,0.5,1.0,1.5,2.0,3.0] else 1.0)
-            ke_m=st.number_input("k_eff (pci)",value=float(ss.k_corrected) if ss.k_corrected else 200.0,
-                                  step=10.0,min_value=10.0,key="ke_manual")
-            if st.button("✅ ใช้ค่านี้",key="use_ke_m"):
-                ss.k_corrected=ke_m; ss.ls_value=ls_m
-                st.success(f"k_eff={ke_m:.0f} pci")
-            st.markdown('</div>',unsafe_allow_html=True)
+            raw_ls = None
+
+        if raw_ls:
+            img2 = PILImage.open(io.BytesIO(raw_ls)).convert("RGB")
+            w2, h2 = img2.size
+            img2_draw = img2.copy()
+            draw2 = PILDraw.Draw(img2_draw)
+
+            col_ctrl2, col_img2 = st.columns([1, 2])
+
+            with col_ctrl2:
+                st.markdown('<div class="card"><h4>⚙️ กำหนดเส้นกราฟ</h4>', unsafe_allow_html=True)
+
+                # LS presets จาก Rigid_Pavement__3_.py
+                LS_PRESETS_LOCAL = {
+                    0.0: (138, 715, 753, 84),
+                    0.5: (129, 728, 908,  0),
+                    1.0: (150, 718, 903, 84),
+                    1.5: (153, 721, 928,138),
+                    2.0: (164, 718, 929,220),
+                    3.0: (212, 719, 929,328),
+                }
+                ls_opts = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0]
+                cur_ls  = ss.get('ls_select_box', 1.0)
+                def_idx = ls_opts.index(cur_ls) if cur_ls in ls_opts else 2
+                ls_sel  = st.selectbox("เลือกค่า LS", ls_opts, index=def_idx, key="ls_select_box")
+
+                # Auto-preset เมื่อ LS เปลี่ยน
+                if ss.get('last_ls_select') != ls_sel:
+                    ss['last_ls_select'] = ls_sel
+                    coords = LS_PRESETS_LOCAL.get(ls_sel, (150,718,903,84))
+                    ss['_ls_x1'], ss['_ls_y1'] = coords[0], coords[1]
+                    ss['_ls_x2'], ss['_ls_y2'] = coords[2], coords[3]
+
+                with st.expander("ปรับแต่งเส้น LS ละเอียด", expanded=False):
+                    ls_x1 = st.slider("จุดเริ่ม X", -100, w2+100, ss.get('_ls_x1', 150), key="_ls_x1")
+                    ls_y1 = st.slider("จุดเริ่ม Y", -100, h2+100, ss.get('_ls_y1', 718), key="_ls_y1")
+                    ls_x2 = st.slider("จุดจบ X",   -100, w2+100, ss.get('_ls_x2', 903), key="_ls_x2")
+                    ls_y2 = st.slider("จุดจบ Y",   -100, h2+100, ss.get('_ls_y2',  84), key="_ls_y2")
+
+                draw2.line([(ls_x1,ls_y1),(ls_x2,ls_y2)], fill="red", width=6)
+                m_red = (ls_y2-ls_y1)/(ls_x2-ls_x1) if ls_x2-ls_x1 != 0 else None
+                c_red = ls_y1 - m_red*ls_x1 if m_red else 0
+
+                st.markdown("---")
+                with st.expander("📍 ตั้งค่าตำแหน่งแกนกราฟ", expanded=True):
+                    axis_left_x  = st.number_input("ตำแหน่งแกน Y (ซ้ายสุด)", value=ss.get('axis_left',100),     step=5, key="axis_left")
+                    axis_bottom_y= st.number_input("ตำแหน่งแกน X (ล่างสุด)", value=ss.get('axis_bottom',h2-50), step=5, key="axis_bottom")
+
+                st.caption(f"k∞ จาก Tab ก่อนหน้า = {ss.k_inf:.0f} pci")
+                k_pos_x   = st.slider("ตำแหน่ง k∞ บนแกน X", 0, w2, ss.get('k_pos_x', w2//2), key="k_pos_x")
+                intersect_y = int(m_red*k_pos_x + c_red) if m_red else h2//2
+
+                draw2.line([(k_pos_x,axis_bottom_y),(k_pos_x,intersect_y)], fill="blue", width=5)
+
+                def _arrow2(drw, start, end, color, lw=5, arrow=14):
+                    drw.line([start, end], fill=color, width=lw)
+                    dx=end[0]-start[0]; dy=end[1]-start[1]
+                    L=math.sqrt(dx*dx+dy*dy)
+                    if L>0:
+                        dx/=L; dy/=L; px=-dy; py=dx
+                        bx=end[0]-arrow*dx; by=end[1]-arrow*dy
+                        drw.polygon([(end[0],end[1]),(int(bx+arrow*0.5*px),int(by+arrow*0.5*py)),
+                                     (int(bx-arrow*0.5*px),int(by-arrow*0.5*py))], fill=color)
+
+                _arrow2(draw2, (k_pos_x, intersect_y), (int(axis_left_x), intersect_y), "blue")
+                draw2.ellipse([(k_pos_x-8,intersect_y-8),(k_pos_x+8,intersect_y+8)],
+                               fill="black", outline="white", width=2)
+
+                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('<div class="card"><h4>📝 บันทึกผลลัพธ์</h4>', unsafe_allow_html=True)
+
+                k_corr_val = st.number_input(
+                    "k_eff Corrected (pci)",
+                    value=int(ss.get('k_corrected', max(10, ss.k_inf - 100)) if ss.k_inf else 200),
+                    step=10, min_value=10, key="k_corr_input"
+                )
+                if k_corr_val > ss.k_inf and ss.k_inf > 0:
+                    st.warning(f"⚠️ k_eff ({k_corr_val:.0f}) ต้องไม่เกิน k∞ ({ss.k_inf:.0f} pci)")
+                    k_corr_val = ss.k_inf
+
+                if st.button("✅ บันทึก k_eff", type="primary", key="save_keff"):
+                    ss.k_corrected = float(k_corr_val)
+                    ss.ls_value    = ls_sel
+                    buf2 = io.BytesIO()
+                    img2_draw.save(buf2, format='PNG')
+                    ss['nomograph_img_ls'] = buf2.getvalue()
+                    ss['img2_original']    = raw_ls
+                    st.markdown(f'<div class="result-pass">k_eff = <b>{k_corr_val} pci</b> (LS={ls_sel}) บันทึกแล้ว → ใช้ใน Tab Rigid Design</div>', unsafe_allow_html=True)
+
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            with col_img2:
+                if ss.get('k_corrected'):
+                    st.markdown(f'<div class="result-pass" style="margin-bottom:0.5rem;">k_eff = <b>{ss.k_corrected:.0f} pci</b>  |  LS = {ss.ls_value}</div>', unsafe_allow_html=True)
+                st.image(img2_draw, caption=f"Loss of Support (LS={ls_sel}) — AASHTO 1993 Fig.3.4", use_container_width=True)
+
+                buf2b = io.BytesIO()
+                img2_draw.save(buf2b, format='PNG')
+                ss['nomograph_img_ls'] = buf2b.getvalue()
+        else:
+            st.markdown("""
+            <div class="result-warn">
+                👆 กรุณา Upload รูป <b>Figure 3.4</b> จาก AASHTO 1993 Guide<br>
+                <small>รองรับ PNG, JPG, JPEG</small>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown('<div class="card"><h4>📝 หรือกรอกค่า k_eff โดยตรง</h4>', unsafe_allow_html=True)
+            ls_opts2 = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0]
+            ls_man   = st.select_slider("Loss of Support (LS)", ls_opts2,
+                                        value=ss.ls_value if ss.ls_value in ls_opts2 else 1.0,
+                                        key="ls_manual")
+            k_eff_man= st.number_input("k_eff (pci)", value=float(ss.k_corrected) if ss.k_corrected else 200.0,
+                                        step=10.0, min_value=10.0, key="k_eff_manual")
+            if st.button("✅ ใช้ค่านี้", key="use_keff_manual"):
+                ss.k_corrected = k_eff_man
+                ss.ls_value    = ls_man
+                st.success(f"✅ k_eff = {k_eff_man:.0f} pci บันทึกแล้ว")
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════
-#  TAB 5: RIGID DESIGN
+#  TAB 5: RIGID DESIGN (JPCP / JRCP / CRCP)
 # ══════════════════════════════════════════════
 with tab5:
     st.markdown("### 🏗️ Rigid Pavement Design — AASHTO 1993")
 
-    # Status
-    sc1,sc2,sc3=st.columns(3)
-    with sc1: st.markdown(badge('esal_rigid','ESAL Rigid'),unsafe_allow_html=True)
-    with sc2: st.markdown(badge('k_corrected','k_eff'),unsafe_allow_html=True)
-    with sc3: st.markdown(badge('mr_psi','CBR/Mr'),unsafe_allow_html=True)
+    # ── Status bar ──
+    col_s1, col_s2, col_s3 = st.columns(3)
+    with col_s1:
+        st.markdown(status_badge('esal_rigid', 'ESAL Rigid'), unsafe_allow_html=True)
+    with col_s2:
+        st.markdown(status_badge('k_corrected', 'k_eff'), unsafe_allow_html=True)
+    with col_s3:
+        st.markdown(status_badge('cbr_design', 'CBR/Mr'), unsafe_allow_html=True)
+
     st.markdown("---")
 
-    col5l,col5r=st.columns([1.1,1])
+    # ── Shared design parameters ──
+    st.markdown('<div class="card"><h4>⚙️ พารามิเตอร์ร่วม (ใช้กับทุก Type)</h4>', unsafe_allow_html=True)
+    rp1, rp2, rp3, rp4, rp5, rp6 = st.columns(6)
+    with rp1:
+        fc_cube = st.number_input("f'c (ksc)", value=350, step=10, min_value=200, key="fc_cube")
+    with rp2:
+        fc_cyl  = 0.8 * fc_cube
+        fc_psi  = fc_cyl * 14.223
+        ec_psi  = 57000 * math.sqrt(fc_psi)
+        sc_auto = min(600, 10.0 * math.sqrt(fc_psi))
+        sc_inp  = st.number_input("Sc (psi)", value=int(sc_auto), step=10,
+                                  min_value=100, max_value=700, key="sc_inp")
+    with rp3:
+        r0_rig = st.selectbox("Reliability R0 (%)", list(ZR_MAP.keys()),
+                               index=10, key="r0_rig")
+        zr_rig = ZR_MAP[r0_rig]
+    with rp4:
+        so_rig = st.number_input("So", value=0.35, step=0.01,
+                                 min_value=0.2, max_value=0.5, key="so_rig")
+    with rp5:
+        pi_rig = st.number_input("Pi", value=4.5, step=0.1, key="pi_rig")
+    with rp6:
+        pt_rig2 = st.number_input("Pt", value=2.5, step=0.1, key="pt_rig2")
 
-    # ════ คอลัมน์ซ้าย — Layer Editor ════
-    with col5l:
-        st.markdown('<div class="card"><h4>🔩 ชั้นโครงสร้าง (JPCP/JRCP/CRCP ใช้ร่วมกัน)</h4>',unsafe_allow_html=True)
+    st.markdown(
+        f"Ec = **{ec_psi:,.0f} psi** &nbsp;|&nbsp; "
+        f"f'c cylinder = **{fc_cyl:.0f} ksc** &nbsp;|&nbsp; "
+        f"ZR = **{zr_rig}**"
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        # Header
-        rh=st.columns([3,1.2,1.5,0.4])
-        rh[0].markdown("**วัสดุ**"); rh[1].markdown("**หนา(cm)**")
-        rh[2].markdown("**E (MPa)**"); rh[3].markdown("")
+    # ── Sub-tabs JPCP / JRCP / CRCP ──
+    sub_jpcp, sub_jrcp, sub_crcp = st.tabs(["🟦 JPCP", "🟧 JRCP", "🟥 CRCP"])
 
-        r_layers=[]; total_h=0.0; e_eq_psi=0.0; dsb_in=0.0
+    def rigid_design_panel(ptype, tab_key):
+        """
+        Panel ออกแบบ Rigid Pavement แต่ละประเภท
+        - Layer editor: วัสดุ + หนา + E_MPa (auto-fill แก้ไขได้)
+        - คำนวณ E_eq, DSB → ส่งไป session state (Tab K-Value ดึงได้)
+        - ดึง ESAL, k_eff อัตโนมัติ แก้ไขได้
+        """
+        j_default  = J_VALUES[ptype]
+        mat_opts   = list(RIGID_LAYER_MATERIALS.keys())
 
-        for li in range(6):
-            rc0,rc1,rc2,rc3=st.columns([3,1.2,1.5,0.4])
-            with rc0:
-                mat=st.selectbox(f"R{li+1}",RIGID_MAT_NAMES,key=f"r5m_{li}",label_visibility="collapsed")
-            with rc1:
-                h_cm=st.number_input("cm",value=0,step=1,min_value=0,
-                                     key=f"r5h_{li}",label_visibility="collapsed")
-            with rc2:
-                e_def=RIGID_MATERIALS[mat]["e_mpa"] if mat!="None" and mat in RIGID_MATERIALS else 0
-                # Track material change → reset E
-                pk=f"_r5pm_{li}"
-                if ss.get(pk)!=mat:
-                    ss[pk]=mat; ss[f"r5e_{li}"]=e_def
-                e_mpa=st.number_input("MPa",value=ss.get(f"r5e_{li}",e_def),
-                                       step=50,min_value=0,key=f"r5e_{li}",
-                                       label_visibility="collapsed",
-                                       disabled=(mat=="None" or h_cm==0))
-            with rc3:
-                if mat!="None" and h_cm>0: st.markdown("✅")
+        col_rd_l, col_rd_r = st.columns([1.1, 1])
 
-            if mat!="None" and h_cm>0 and e_mpa>0:
-                r_layers.append({"name":mat,"h_cm":h_cm,"e_mpa":e_mpa})
-                total_h+=h_cm
-                # แถวผล — แถวเดียวกัน inline
-                ri=st.columns([3,1.2,1.5,0.4])
-                ri[0].markdown(f'<div class="layer-row">{mat[:30]}</div>',unsafe_allow_html=True)
-                ri[1].markdown(f'<div class="layer-row">{h_cm} cm</div>',unsafe_allow_html=True)
-                ri[2].markdown(f'<div class="layer-row">{e_mpa:,} MPa</div>',unsafe_allow_html=True)
-                ri[3].markdown("")
+        # ════════════════════════════════
+        #  คอลัมน์ซ้าย — Layer Editor
+        # ════════════════════════════════
+        with col_rd_l:
+            st.markdown(
+                f'<div class="card"><h4>🔩 ชั้นโครงสร้าง – {ptype}</h4>',
+                unsafe_allow_html=True
+            )
 
-        # คำนวณ E_eq
-        if r_layers:
-            sum_hE=sum(l["h_cm"]*(l["e_mpa"]**(1/3)) for l in r_layers)
-            e_eq_mpa=(sum_hE/total_h)**3
-            e_eq_psi=e_eq_mpa*145.038; dsb_in=total_h/2.54
-            ss['nomo_esb']=int(e_eq_psi); ss['nomo_dsb']=round(dsb_in,2)
-            m1,m2,m3,m4=st.columns(4)
-            for col_,val_,lbl_ in [(m1,f"{total_h:.0f}","รวม (cm)"),
-                                    (m2,f"{dsb_in:.1f}","DSB (in)"),
-                                    (m3,f"{e_eq_psi:,.0f}","E_eq (psi)"),
-                                    (m4,f"{e_eq_mpa:.1f}","E_eq (MPa)")]:
-                col_.markdown(f'<div class="metric-box"><div class="val" style="font-size:1.1rem;">{val_}</div><div class="lbl">{lbl_}</div></div>',unsafe_allow_html=True)
-            st.markdown(f'<div class="result-info" style="font-size:0.82rem;">→ Tab K-Value: ESB=<b>{e_eq_psi:,.0f} psi</b> | DSB=<b>{dsb_in:.1f} in</b></div>',unsafe_allow_html=True)
-        st.markdown('</div>',unsafe_allow_html=True)
+            # Header row
+            h0, h1, h2, h3 = st.columns([3, 1.2, 1.5, 0.5])
+            h0.markdown("**วัสดุ**")
+            h1.markdown("**หนา (cm)**")
+            h2.markdown("**E (MPa)**")
+            h3.markdown("")
 
-    # ════ คอลัมน์ขวา — Parameters & Calc ════
-    with col5r:
-        st.markdown('<div class="card"><h4>⚙️ พารามิเตอร์ออกแบบ</h4>',unsafe_allow_html=True)
-        rp1,rp2=st.columns(2)
-        with rp1:
-            fc=st.number_input("f'c (ksc)",value=350,step=10,min_value=200,key="r5_fc")
-            fc_c=0.8*fc; fc_p=fc_c*14.223; ec_p=57000*math.sqrt(fc_p)
-            sc_a=min(600,10.0*math.sqrt(fc_p))
-            sc=st.number_input("Sc (psi)",value=int(sc_a),step=10,min_value=100,max_value=700,key="r5_sc")
-        with rp2:
-            pi_r=st.number_input("Pi (Rigid)",value=4.5,step=0.1,key="r5_pi")
-            so_r=st.number_input("So (Rigid)",value=0.35,step=0.01,min_value=0.2,max_value=0.5,key="r5_so")
-        rp3,rp4=st.columns(2)
-        with rp3:
-            cd=st.number_input("Cd (Drainage)",value=1.0,step=0.05,min_value=0.5,max_value=1.25,key="r5_cd")
-            j_jr=st.number_input("J – JPCP/JRCP",value=2.8,step=0.1,min_value=1.0,max_value=5.0,key="r5_j_jr")
-        with rp4:
-            j_cr=st.number_input("J – CRCP",value=2.6,step=0.1,min_value=1.0,max_value=5.0,key="r5_j_crcp")
-            st.markdown(f"<small>Ec = {ec_p:,.0f} psi</small>",unsafe_allow_html=True)
-            st.markdown(f"<small>ZR = {ZR_MAP[ss.r0]} (R0={ss.r0}%)</small>",unsafe_allow_html=True)
-        st.markdown('</div>',unsafe_allow_html=True)
+            layer_r    = []
+            total_h_cm = 0.0
+            e_eq_psi   = 0.0
 
-        # ESAL & k_eff
-        st.markdown('<div class="card"><h4>📊 Design ESAL & k_eff</h4>',unsafe_allow_html=True)
-        # ESAL: แต่ละ Slab ใช้ค่าของตัวเอง — ใช้ slab 30cm เป็น representative display
-        _esal_30=int(ss.esal_rigid.get(30,ss.esal_rigid.get(30.0,0)))
-        if _esal_30>0:
-            st.markdown(f'<div class="badge-ready">📊 ESAL (Slab 30cm ref) = {_esal_30:,}</div>',unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="badge-wait">⚠️ คำนวณ ESAL ใน Tab 1 ก่อน</div>',unsafe_allow_html=True)
-        st.caption("หมายเหตุ: แต่ละ Slab จะใช้ ESAL ของตัวเองในการคำนวณ")
+            for li in range(5):
+                lc_a, lc_b, lc_c, lc_d = st.columns([3, 1.2, 1.5, 0.5])
 
-        _k=float(ss.k_corrected) if ss.k_corrected else 0.0
-        if _k>0:
-            st.markdown(f'<div class="badge-ready">📐 k_eff = {_k:.0f} pci</div>',unsafe_allow_html=True)
-            # update widget
-            if ss.get('_r5k_prev')!=_k: ss['_r5k_prev']=_k; ss['r5_keff']=_k
-        else:
-            st.markdown('<div class="badge-wait">⚠️ คำนวณ k_eff ใน Tab K-Value ก่อน</div>',unsafe_allow_html=True)
-        k_eff=st.number_input("k_eff (pci) — แก้ไขได้",
-                               value=ss.get('r5_keff',_k if _k>0 else 200.0),
-                               step=10.0,min_value=10.0,key="r5_keff")
-        st.markdown('</div>',unsafe_allow_html=True)
+                with lc_a:
+                    mat_r = st.selectbox(
+                        f"ชั้น {li+1}", mat_opts,
+                        key=f"rmat_{tab_key}_{li}",
+                        label_visibility="collapsed"
+                    )
+                with lc_b:
+                    h_r = st.number_input(
+                        "cm", value=0, step=1, min_value=0,
+                        key=f"rh_{tab_key}_{li}",
+                        label_visibility="collapsed"
+                    )
+                with lc_c:
+                    # Auto-fill E_MPa: ติดตาม material ที่เลือก
+                    # ถ้า material เปลี่ยน → อัปเดต session state ทันที
+                    prev_mat_key = f"_prev_mat_{tab_key}_{li}"
+                    e_key        = f"re_{tab_key}_{li}"
+                    e_default    = RIGID_LAYER_E_DEFAULT.get(mat_r, 100) if mat_r != "None" else 0
+                    if ss.get(prev_mat_key) != mat_r:
+                        ss[prev_mat_key] = mat_r
+                        ss[e_key]        = e_default
+                    e_mpa = st.number_input(
+                        "MPa", value=ss.get(e_key, e_default),
+                        step=50, min_value=0,
+                        key=e_key,
+                        label_visibility="collapsed",
+                        disabled=(mat_r == "None" or h_r == 0)
+                    )
+                with lc_d:
+                    if mat_r != "None" and h_r > 0:
+                        st.markdown("✅")
 
-        # ── คำนวณปุ่มเดียว ──
-        if st.button("✅ คำนวณ JPCP/JRCP + CRCP × ทุก Slab",
-                     type="primary",use_container_width=True,key="r5_calc"):
-            any_esal=any(v>0 for v in ss.esal_rigid.values())
-            if not any_esal:
-                st.warning("⚠️ ใส่ ESAL ก่อน (Tab 1)")
-            elif k_eff<=0:
-                st.warning("⚠️ ใส่ k_eff ก่อน")
+                if mat_r != "None" and h_r > 0 and e_mpa > 0:
+                    layer_r.append({
+                        "name": mat_r,
+                        "thickness_cm": h_r,
+                        "E_MPa": e_mpa
+                    })
+                    total_h_cm += h_r
+
+            # ── คำนวณ E_equivalent (Odemark) ──
+            if layer_r:
+                total_valid_cm = sum(l["thickness_cm"] for l in layer_r)
+                sum_h_e_cbrt   = sum(
+                    l["thickness_cm"] * (l["E_MPa"] ** (1/3))
+                    for l in layer_r
+                )
+                e_eq_mpa = (sum_h_e_cbrt / total_valid_cm) ** 3 if total_valid_cm > 0 else 0
+                e_eq_psi = e_eq_mpa * 145.038
+                dsb_in   = total_valid_cm / 2.54
+
+                # ── ส่งค่าไป session state → Tab K-Value ดึงได้ ──
+                ss['nomo_esb'] = int(e_eq_psi)
+                ss['nomo_dsb'] = round(dsb_in, 2)
+
+                st.markdown(f"""
+                <div class="result-info" style="margin-top:0.5rem;font-size:0.88rem;">
+                    📐 รวมชั้นทาง = <b>{total_valid_cm:.0f} cm</b>
+                    ({dsb_in:.1f} in) &nbsp;|&nbsp;
+                    E_eq = <b>{e_eq_psi:,.0f} psi</b>
+                    ({e_eq_mpa:.1f} MPa)<br>
+                    <small>→ ส่งค่าไป Tab K-Value อัตโนมัติ (ESB={e_eq_psi:,.0f} psi, DSB={dsb_in:.1f} in)</small>
+                </div>""", unsafe_allow_html=True)
             else:
-                zr_r=ZR_MAP[ss.r0]
-                results={}
-                for D in SLAB_THICKNESSES:
-                    # ESAL ตรงตาม Slab
-                    esal_D=int(ss.esal_rigid.get(D,ss.esal_rigid.get(int(D),
-                               ss.esal_rigid.get(float(D),_esal_30))))
-                    results[D]={}
-                    for gkey,j_val in [("JPCP_JRCP",j_jr),("CRCP",j_cr)]:
-                        wc=w18_rigid(D,pi_r,ss.pt,zr_r,so_r,sc,cd,j_val,ec_p,k_eff)
-                        results[D][gkey]={
-                            "w18_cap":wc or 0,
-                            "pass":(wc is not None and wc>=esal_D),
-                            "esal":esal_D,"j":j_val
-                        }
-                # min slab per group
-                min_slab={}
-                for gk in ["JPCP_JRCP","CRCP"]:
-                    passed=[D for D in SLAB_THICKNESSES if results[D][gk]["pass"]]
-                    min_slab[gk]=min(passed) if passed else None
-                # best type
-                valid_m={k:v for k,v in min_slab.items() if v is not None}
-                best_g=min(valid_m,key=lambda k:valid_m[k]) if valid_m else None
+                st.markdown(
+                    '<div class="result-warn">กรุณากรอกชั้นทางอย่างน้อย 1 ชั้น</div>',
+                    unsafe_allow_html=True
+                )
 
-                ss.rigid_results={
-                    "results":results,"min_slab":min_slab,
-                    "best_group":best_g,
-                    "design_esal":_esal_30,"k_eff":k_eff,
-                    "fc":fc,"sc":sc,"j_jr":j_jr,"j_crcp":j_cr,"cd":cd,
-                    "ec_psi":ec_p,"layers":r_layers,
-                    "e_eq_psi":e_eq_psi,"dsb_in":dsb_in,
-                }
-                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
-    # ════ ผลลัพธ์ตารางเปรียบเทียบ ════
-    rr=ss.get("rigid_results",{})
-    if rr and "results" in rr:
-        results=rr["results"]; min_slab=rr["min_slab"]; best_g=rr.get("best_group")
-        de=rr.get("design_esal",0); kv=rr.get("k_eff",0)
+        # ════════════════════════════════
+        #  คอลัมน์ขวา — Parameters + Check
+        # ════════════════════════════════
+        with col_rd_r:
+            st.markdown(
+                f'<div class="card"><h4>⚙️ พารามิเตอร์ – {ptype}</h4>',
+                unsafe_allow_html=True
+            )
 
-        st.markdown("---")
-        st.markdown("#### 📊 ผลการออกแบบ — เปรียบเทียบทุก Slab")
-        st.markdown(f'<div class="result-info">W18 Required (ref Slab 30cm) = <b>{de:,.0f}</b> &nbsp;|&nbsp; k_eff = <b>{kv:.0f} pci</b></div>',unsafe_allow_html=True)
+            pr1, pr2 = st.columns(2)
+            with pr1:
+                j_val  = st.number_input(
+                    f"J ({ptype})", value=j_default,
+                    step=0.1, min_value=1.0, max_value=5.0,
+                    key=f"j_{tab_key}"
+                )
+                cd_val = st.number_input(
+                    "Cd (Drainage)", value=1.0, step=0.05,
+                    min_value=0.5, max_value=1.25,
+                    key=f"cd_{tab_key}"
+                )
+            with pr2:
+                d_sel = st.selectbox(
+                    "Slab Thickness",
+                    SLAB_THICKNESSES,
+                    index=2,
+                    format_func=lambda d: SLAB_LABELS[SLAB_THICKNESSES.index(d)],
+                    key=f"d_{tab_key}"
+                )
 
-        # HTML Table
-        html_r=""
-        for D,lbl in zip(SLAB_THICKNESSES,SLAB_LABELS):
-            html_r+='<tr>'
-            html_r+=f'<td style="padding:7px 10px;font-weight:600;border:1px solid #E0E0E0;">{lbl}</td>'
-            for gk,gcol in [("JPCP_JRCP","#1565C0"),("CRCP","#B71C1C")]:
-                rv=results[D][gk]
-                wc=rv["w18_cap"]; passed=rv["pass"]; esal_D=rv["esal"]
-                is_min=min_slab.get(gk)==D
-                is_best=best_g==gk and is_min
-                bg="#C8E6C9" if (passed and is_min) else ("#F1F8E9" if passed else "#FFEBEE")
-                bdr=f"3px solid #FFD600" if is_best else "1px solid #E0E0E0"
-                clr="#1B5E20" if passed else "#B71C1C"
-                fw="700" if is_min else "400"
-                icon="★ " if is_min else ""
-                trph=" 🏆" if is_best else ""
-                st_="PASS" if passed else "FAIL"
-                ws=f"{wc/1e6:.2f}M" if wc>0 else "—"
-                mg=f"+{(wc/esal_D-1)*100:.1f}%" if (passed and esal_D>0 and wc>0) else ""
-                html_r+=(f'<td style="background:{bg};border:{bdr};padding:7px 10px;'
-                         f'text-align:center;color:{clr};font-weight:{fw};">'
-                         f'{icon}{st_}{trph}<br>'
-                         f'<small style="color:#555;">W18={ws} {mg}</small><br>'
-                         f'<small style="color:#888;">ESAL={esal_D/1e6:.2f}M</small>'
-                         f'</td>')
-            html_r+='</tr>'
+            # ── ESAL: ดึงอัตโนมัติจาก Tab 1 ──
+            # normalize key: ลอง int และ float เพื่อ match key ใน esal_rigid
+            _esal_r = ss.esal_rigid or {}
+            esal_auto = int(_esal_r.get(d_sel,
+                            _esal_r.get(int(d_sel),
+                            _esal_r.get(float(d_sel), 0))))
+            if esal_auto > 0:
+                st.markdown(
+                    f'<div class="badge-ready">📊 ESAL จาก Tab 1 (Slab {d_sel} cm) = {esal_auto:,}</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    '<div class="badge-wait">⚠️ ยังไม่มี ESAL — คำนวณใน Tab 1 ก่อน หรือกรอกเอง</div>',
+                    unsafe_allow_html=True
+                )
 
-        st.markdown(f"""<table style="width:100%;border-collapse:collapse;
-                font-family:'Sarabun',sans-serif;font-size:0.9rem;margin:0.5rem 0;">
-            <thead><tr style="background:#1B5E20;color:white;">
-                <th style="padding:8px 10px;text-align:left;">Slab</th>
-                <th style="padding:8px 10px;text-align:center;color:#90CAF9;">
-                    🟦 JPCP / JRCP<br><small>J={rr.get('j_jr',2.8)}</small></th>
-                <th style="padding:8px 10px;text-align:center;color:#EF9A9A;">
-                    🟥 CRCP<br><small>J={rr.get('j_crcp',2.6)}</small></th>
-            </tr></thead>
-            <tbody>{html_r}</tbody></table>
-            <div style="font-size:0.75rem;color:#666;margin-top:0.3rem;">
-            ★ = ความหนาน้อยสุดที่ PASS | 🏆 = ประหยัดที่สุด |
-            W18=Capacity | ESAL=Required (ตาม Slab นั้น)</div>""",
-            unsafe_allow_html=True)
+            # อัปเดต session state เมื่อ ESAL ใน Tab 1 เปลี่ยน
+            _w18_key     = f"w18_{tab_key}"
+            _esal_key    = f"_prev_esal_{tab_key}_{d_sel}"
+            if esal_auto > 0 and ss.get(_esal_key) != esal_auto:
+                ss[_esal_key] = esal_auto
+                ss[_w18_key]  = esal_auto
 
-        # Summary
-        st.markdown("#### 🎯 ความหนาออกแบบที่เลือก")
-        sc1,sc2=st.columns(2)
-        for col_,gk,icon_,lbl_ in [(sc1,"JPCP_JRCP","🟦","JPCP / JRCP"),(sc2,"CRCP","🟥","CRCP")]:
-            with col_:
-                dm=min_slab.get(gk)
-                if dm is not None:
-                    lbl_m=SLAB_LABELS[SLAB_THICKNESSES.index(dm)]
-                    rv=results[dm][gk]
-                    mg=(rv["w18_cap"]/rv["esal"]-1)*100 if rv["esal"]>0 else 0
-                    trph=" 🏆" if best_g==gk else ""
-                    bclr="#FFD600" if best_g==gk else "#C8E6C9"
-                    st.markdown(f"""<div class="metric-box" style="border-color:{bclr};">
-                        <div style="font-size:1rem;">{icon_} {lbl_}{trph}</div>
-                        <div class="val" style="font-size:1.3rem;">{lbl_m}</div>
-                        <div class="lbl">W18 Cap = {rv['w18_cap']:,.0f}</div>
-                        <div class="lbl" style="color:#2E7D32;">Safety = {mg:+.1f}%</div>
-                    </div>""",unsafe_allow_html=True)
+            w18_req = st.number_input(
+                "W18 Design (ESAL) — แก้ไขได้",
+                value=ss.get(_w18_key, esal_auto),
+                step=100000, min_value=0,
+                key=_w18_key
+            )
+
+            # ── k_eff: ดึงอัตโนมัติจาก Tab K-Value ──
+            k_eff_auto = float(ss.k_corrected) if ss.k_corrected else 0.0
+            if k_eff_auto > 0:
+                st.markdown(
+                    f'<div class="badge-ready">📐 k_eff จาก Tab K-Value = {k_eff_auto:.0f} pci</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(
+                    '<div class="badge-wait">⚠️ ยังไม่มี k_eff — คำนวณใน Tab K-Value ก่อน หรือกรอกเอง</div>',
+                    unsafe_allow_html=True
+                )
+
+            k_eff_inp = st.number_input(
+                "k_eff (pci) — แก้ไขได้",
+                value=k_eff_auto if k_eff_auto > 0 else 200.0,
+                step=10.0, min_value=10.0,
+                key=f"keff_{tab_key}"
+            )
+
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            # ── Design Check ──
+            if st.button(f"✅ Design Check – {ptype}",
+                          type="primary", key=f"dc_{tab_key}"):
+                if w18_req <= 0:
+                    st.warning("⚠️ W18 Design = 0 — กรุณาใส่ ESAL หรือคำนวณใน Tab 1")
                 else:
-                    st.markdown(f"""<div class="metric-box" style="border-color:#EF9A9A;">
-                        <div style="font-size:1rem;">{icon_} {lbl_}</div>
-                        <div class="val" style="color:#B71C1C;font-size:0.95rem;">ไม่มี Slab ที่ผ่าน</div>
-                        <div class="lbl">พิจารณาเพิ่ม k_eff หรือ f'c</div>
-                    </div>""",unsafe_allow_html=True)
+                    w18_cap = aashto_rigid_w18(
+                        d_sel, pi_rig, pt_rig2, zr_rig, so_rig,
+                        sc_inp, cd_val, j_val, ec_psi, k_eff_inp
+                    )
+                    if w18_cap is None:
+                        st.error("ไม่สามารถคำนวณได้ — ตรวจสอบพารามิเตอร์")
+                    else:
+                        passed = w18_cap >= w18_req
+                        margin = (w18_cap / w18_req - 1) * 100 if w18_req > 0 else float('inf')
+                        css    = "result-pass" if passed else "result-fail"
+                        chk    = "✅ PASS" if passed else "❌ FAIL"
 
-        if rr.get("layers"):
-            with st.expander("📋 ชั้นโครงสร้าง"):
-                st.dataframe(pd.DataFrame(rr["layers"]),use_container_width=True,hide_index=True)
+                        c1, c2, c3 = st.columns(3)
+                        with c1:
+                            st.markdown(f"""<div class="metric-box">
+                                <div class="val">{w18_cap:,.0f}</div>
+                                <div class="lbl">W18 Capacity</div>
+                            </div>""", unsafe_allow_html=True)
+                        with c2:
+                            st.markdown(f"""<div class="metric-box">
+                                <div class="val">{w18_req:,.0f}</div>
+                                <div class="lbl">W18 Required</div>
+                            </div>""", unsafe_allow_html=True)
+                        with c3:
+                            color = '#1B5E20' if passed else '#B71C1C'
+                            st.markdown(f"""<div class="metric-box">
+                                <div class="val" style="color:{color}">{margin:+.1f}%</div>
+                                <div class="lbl">Safety Margin</div>
+                            </div>""", unsafe_allow_html=True)
+
+                        st.markdown(f"""
+                        <div class="{css}" style="margin-top:0.8rem;font-size:1rem;">
+                            <b>{chk}</b><br>
+                            Slab {d_sel} cm &nbsp;|&nbsp;
+                            k_eff = {k_eff_inp:.0f} pci &nbsp;|&nbsp;
+                            J = {j_val} &nbsp;|&nbsp;
+                            Cd = {cd_val}<br>
+                            Ec = {ec_psi:,.0f} psi &nbsp;|&nbsp;
+                            Sc = {sc_inp} psi
+                        </div>""", unsafe_allow_html=True)
+
+                        # ── บันทึกผลลัพธ์ ──
+                        if not isinstance(ss.rigid_results, dict):
+                            ss.rigid_results = {}
+                        ss.rigid_results[ptype] = {
+                            'd_cm':    d_sel,
+                            'k_eff':   k_eff_inp,
+                            'fc':      fc_cube,
+                            'sc':      sc_inp,
+                            'j':       j_val,
+                            'cd':      cd_val,
+                            'w18_cap': w18_cap,
+                            'w18_req': w18_req,
+                            'pass':    passed,
+                            'margin':  margin,
+                            'layers':  layer_r,
+                            'e_eq_psi': e_eq_psi,
+                        }
+
+                        # ── แสดงตารางชั้นทาง ──
+                        if layer_r:
+                            st.markdown("#### 📋 ชั้นโครงสร้างทาง")
+                            df_lr = pd.DataFrame([{
+                                "ชั้น": i+1,
+                                "วัสดุ": l["name"],
+                                "หนา (cm)": l["thickness_cm"],
+                                "E (MPa)": l["E_MPa"],
+                            } for i, l in enumerate(layer_r)])
+                            df_lr["h×E^(1/3)"] = df_lr.apply(
+                                lambda r: f"{r['หนา (cm)'] * r['E (MPa)']**( 1/3):.1f}", axis=1
+                            )
+                            st.dataframe(df_lr, use_container_width=True, hide_index=True)
+
+                            if e_eq_psi > 0:
+                                st.markdown(f"""
+                                <div class="result-info" style="font-size:0.88rem;">
+                                    E_equivalent = <b>{e_eq_psi:,.0f} psi</b>
+                                    ({e_eq_psi/145.038:.1f} MPa) &nbsp;|&nbsp;
+                                    DSB = <b>{total_h_cm/2.54:.1f} in</b>
+                                </div>""", unsafe_allow_html=True)
+
+    # ── เรียก panel แต่ละประเภท ──
+    with sub_jpcp:
+        rigid_design_panel("JPCP", "jpcp")
+    with sub_jrcp:
+        rigid_design_panel("JRCP", "jrcp")
+    with sub_crcp:
+        rigid_design_panel("CRCP", "crcp")
 
 # ══════════════════════════════════════════════
 #  TAB 6: REPORT & SAVE
 # ══════════════════════════════════════════════
 with tab6:
-    st.markdown("### 📄 Report & Save")
+    st.markdown("### 📄 Report & Save — Word / JSON")
 
-    # Status
-    sc=st.columns(5)
-    for i,(k,lbl) in enumerate([('esal_rigid','ESAL'),('cbr_values','CBR'),
-                                  ('flex_results','Flexible'),('k_corrected','K-Value'),
-                                  ('rigid_results','Rigid')]):
-        sc[i].markdown(badge(k,lbl),unsafe_allow_html=True)
+    if not DOCX_OK:
+        st.warning("⚠️ ไม่พบ python-docx — ติดตั้งด้วย `pip install python-docx`")
+
+    st.markdown('<div class="card"><h4>📋 สถานะข้อมูลแต่ละส่วน</h4>', unsafe_allow_html=True)
+    sc1,sc2,sc3,sc4,sc5 = st.columns(5)
+    with sc1: st.markdown(status_badge('esal_rigid','ESAL Rigid'), unsafe_allow_html=True)
+    with sc2: st.markdown(status_badge('cbr_values','CBR Analysis'), unsafe_allow_html=True)
+    with sc3: st.markdown(status_badge('flex_results','Flexible Design'), unsafe_allow_html=True)
+    with sc4: st.markdown(status_badge('k_corrected','K-Value'), unsafe_allow_html=True)
+    with sc5: st.markdown(status_badge('rigid_results','Rigid Design'), unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
     st.markdown("---")
+    st.markdown("#### 📥 Download รายงาน Word")
 
-    st.markdown("#### 📥 Download Word Report")
-    st.markdown("**แยกส่วน:**")
-    c1,c2,c3,c4,c5=st.columns(5)
-    for col_,key_,fn_,fname_ in [
-        (c1,'esal_rigid',report_esal,"ESAL_Report.docx"),
-        (c2,'cbr_values',report_cbr,"CBR_Report.docx"),
-        (c3,'flex_results',report_flex,"Flexible_Report.docx"),
-        (c4,'k_corrected',report_kvalue,"KValue_Report.docx"),
-        (c5,'rigid_results',report_rigid,"Rigid_Report.docx"),
-    ]:
-        with col_:
-            if ss.get(key_):
-                b=fn_(dict(ss))
-                if b:
-                    st.download_button(f"📥 {fname_.split('_')[0]}",b,fname_,
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        use_container_width=True)
+    # Project info
+    col_pi1, col_pi2 = st.columns(2)
+    with col_pi1: proj_name = st.text_input("ชื่อโครงการ", value="", placeholder="กรอกชื่อโครงการ...", key="proj_name")
+    with col_pi2: eng_name  = st.text_input("ผู้ออกแบบ", value="รศ.ดร.อิทธิพล มีผล", key="eng_name")
+
+    st.markdown("**เลือกส่วนที่ต้องการ Report:**")
+    r1,r2,r3,r4,r5 = st.columns(5)
+    with r1: chk_esal  = st.checkbox("🚛 ESAL", value=True)
+    with r2: chk_cbr   = st.checkbox("📊 CBR Analysis", value=True)
+    with r3: chk_flex  = st.checkbox("🔧 Flexible Design", value=True)
+    with r4: chk_kval  = st.checkbox("📐 K-Value", value=True)
+    with r5: chk_rigid = st.checkbox("🏗️ Rigid Design", value=True)
+
+    col_dl1, col_dl2 = st.columns(2)
+
+    def get_ss_dict():
+        return {k: ss.get(k) for k in [
+            'esal_rigid','esal_flex','ldf','ddf','pt_rigid','pt_flex',
+            'cbr_values','cbr_percentile','cbr_design','mr_subgrade_psi',
+            'k_subgrade_pci','flex_results','k_inf','k_corrected','ls_value',
+            'nomograph_img_k','nomograph_img_ls','rigid_results'
+        ]}
+
+    with col_dl1:
+        st.markdown("**แยกส่วน:**")
+        ss_d = get_ss_dict()
+
+        if chk_esal and ss.esal_rigid:
+            b = build_report_esal(ss_d)
+            if b: st.download_button("📥 ESAL Report", b, "ESAL_Report.docx",
+                                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                     use_container_width=True)
+
+        if chk_cbr and ss.cbr_values:
+            b = build_report_cbr(ss_d)
+            if b: st.download_button("📥 CBR Report", b, "CBR_Report.docx",
+                                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                     use_container_width=True)
+
+        if chk_flex and ss.flex_results:
+            b = build_report_flexible(ss_d)
+            if b: st.download_button("📥 Flexible Report", b, "Flexible_Report.docx",
+                                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                     use_container_width=True)
+
+        if chk_kval and ss.k_corrected:
+            b = build_report_kvalue(ss_d)
+            if b: st.download_button("📥 K-Value Report", b, "KValue_Report.docx",
+                                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                     use_container_width=True)
+
+        if chk_rigid and ss.rigid_results:
+            b = build_report_rigid(ss_d)
+            if b: st.download_button("📥 Rigid Report", b, "Rigid_Report.docx",
+                                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                     use_container_width=True)
+
+    with col_dl2:
+        st.markdown("**รวมทุกส่วน:**")
+        if st.button("🗂️ สร้างรายงานรวม", type="primary", use_container_width=True):
+            ss_d = get_ss_dict()
+            b_full = build_report_full(ss_d)
+            if b_full:
+                st.download_button("📥 Download Full Report", b_full,
+                                   f"ITM_Pave_Full_Report_{datetime.now().strftime('%Y%m%d')}.docx",
+                                   mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                   use_container_width=True)
             else:
-                st.button(f"📥 {fname_.split('_')[0]}",disabled=True,use_container_width=True)
-
-    st.markdown("**รวมทุกส่วน:**")
-    if st.button("🗂️ สร้างรายงานรวม",type="primary",use_container_width=True):
-        b_full=report_full(dict(ss))
-        if b_full:
-            st.download_button("📥 Full Report",b_full,
-                f"ITM_Pave_Report_{datetime.now().strftime('%Y%m%d')}.docx",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                use_container_width=True)
+                st.warning("ไม่มีข้อมูลสำหรับสร้างรายงาน หรือ python-docx ไม่พร้อม")
 
     st.markdown("---")
-    st.markdown("""<div style='text-align:center;color:#558B2F;font-size:0.82rem;padding:0.5rem;'>
-        🛣️ <b>ITM Pave Pro v2.0</b> — AASHTO 1993 Pavement Design System<br>
+    st.markdown("#### 💾 JSON Save / Load (Sidebar)")
+    st.info("💡 ใช้ปุ่ม Save/Load JSON ใน Sidebar ด้านซ้ายเพื่อบันทึกและโหลดโปรเจกต์ทั้งหมด")
+
+    st.divider()
+    st.markdown("""
+    <div style='text-align:center;color:#558B2F;font-size:0.85rem;padding:0.5rem;'>
+        🛣️ <b>ITM Pave Pro v1.0</b> — AASHTO 1993 Pavement Design System<br>
         พัฒนาโดย รศ.ดร.อิทธิพล มีผล | ภาควิชาครุศาสตร์โยธา | คณะครุศาสตร์อุตสาหกรรม | มจพ.
-    </div>""",unsafe_allow_html=True)
+    </div>
+    """, unsafe_allow_html=True)
