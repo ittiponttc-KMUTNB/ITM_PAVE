@@ -3,12 +3,11 @@
 # ║  Single-file Streamlit App | Engineering Green Theme            ║
 # ║  พัฒนาโดย รศ.ดร.อิทธิพล มีผล | ภาควิชาครุศาสตร์โยธา มจพ.    ║
 # ╠══════════════════════════════════════════════════════════════════╣
-# ║  TAB 1 │ ESAL Calculator (Upload Excel / Manual + Growth Rate) ║
+# ║  TAB 1 │ ESAL Calculator (Pt Global | Upload / Manual)        ║
 # ║  TAB 2 │ CBR Analysis (Percentile)                             ║
 # ║  TAB 3 │ Flexible Pavement Design                              ║
-# ║  TAB 4 │ K-Value Nomograph (k∞ + Loss of Support)             ║
-# ║  TAB 5 │ Rigid Design (JPCP / JRCP / CRCP)                    ║
-# ║  TAB 6 │ Report & Save (Word + JSON)          ปรับปรุง ครั้งที่ 1                 ║
+# ║  TAB 4 │ Rigid Design (K-Nomograph + JPCP/JRCP + CRCP)        ║
+# ║  TAB 5 │ Report & Save (Word + JSON)       ปรับปรุง ครั้งที่ 2 ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 # ─────────────────────────────────────────────
@@ -214,7 +213,7 @@ ZR_MAP = {
     96:-1.751,97:-1.881,98:-2.054,99:-2.327,
 }
 
-J_VALUES = {"JPCP": 2.8, "JRCP": 2.8, "CRCP": 2.6}
+J_VALUES = {"JPCP/JRCP": 2.8, "CRCP": 2.6}
 
 FLEX_LAYER_MATERIALS = {
     "None":                                       (None, None),
@@ -795,6 +794,7 @@ def ss_init():
         'esal_flex':       {},
         'ldf':             0.9,
         'ddf':             0.5,
+        'pt_global':       2.5,
         'pt_rigid':        2.5,
         'pt_flex':         2.5,
         'sn_list':         [6.5, 7.1, 7.5, 8.0],
@@ -867,6 +867,7 @@ with st.sidebar:
             'esal_rigid':     ss.esal_rigid,
             'esal_flex':      {str(k):v for k,v in ss.esal_flex.items()},
             'ldf':            ss.ldf, 'ddf': ss.ddf,
+            'pt_global':      ss.pt_global,
             'pt_rigid':       ss.pt_rigid, 'pt_flex': ss.pt_flex,
             'sn_list':        ss.sn_list,
             'cbr_values':     ss.cbr_values,
@@ -890,7 +891,7 @@ with st.sidebar:
     if uploaded_json:
         try:
             data = json.loads(uploaded_json.read().decode('utf-8'))
-            for k in ['esal_rigid','ldf','ddf','pt_rigid','pt_flex','sn_list',
+            for k in ['esal_rigid','ldf','ddf','pt_global','pt_rigid','pt_flex','sn_list',
                       'cbr_values','cbr_percentile','cbr_design','mr_subgrade_psi',
                       'k_subgrade_pci','flex_results','k_inf','k_corrected',
                       'ls_value','rigid_results']:
@@ -921,18 +922,17 @@ with st.sidebar:
 st.markdown("""
 <div class="main-header">
     <h1>🛣️ ITM Pave Pro — ระบบออกแบบโครงสร้างชั้นทาง AASHTO 1993</h1>
-    <p>ESAL Calculator · CBR Analysis · Flexible Design · K-Value Nomograph · Rigid Design · Report</p>
+    <p>ESAL Calculator · CBR Analysis · Flexible Design · Rigid Design · Report</p>
 </div>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
 #  MAIN TABS
 # ─────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🚛 ESAL Calculator",
     "📊 CBR Analysis",
     "🔧 Flexible Design",
-    "📐 K-Value Nomograph",
     "🏗️ Rigid Design",
     "📄 Report & Save",
 ])
@@ -942,6 +942,28 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 # ══════════════════════════════════════════════
 with tab1:
     st.markdown("### 🚛 ESAL Calculator — AASHTO 1993")
+
+    # ── Pt Global ──
+    st.markdown('<div class="card"><h4>🎯 Terminal Serviceability (Pt) — ค่าร่วม</h4>', unsafe_allow_html=True)
+    pt_g_col1, pt_g_col2 = st.columns([1, 3])
+    with pt_g_col1:
+        pt_global = st.number_input(
+            "Pt (Global Default)",
+            value=float(ss.pt_global), step=0.1,
+            min_value=2.0, max_value=3.0,
+            key="pt_global_input",
+            help="ค่านี้จะเป็น default ใน TAB Flexible และ TAB Rigid — แก้ได้อิสระในแต่ละ TAB"
+        )
+        if pt_global != ss.pt_global:
+            ss.pt_global = pt_global
+    with pt_g_col2:
+        st.markdown(f"""
+        <div class="result-info" style="margin-top:1.6rem;">
+            Pt = <b>{pt_global}</b> &nbsp;→&nbsp;
+            จะส่งเป็น default ไปยัง <b>TAB Flexible Design</b> และ <b>TAB Rigid Design</b>
+            &nbsp;(แก้ไขได้อิสระในแต่ละ TAB)
+        </div>""", unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     sub_esal_rigid, sub_esal_flex = st.tabs(["🔴 Rigid Pavement", "🟢 Flexible Pavement"])
 
@@ -1300,7 +1322,8 @@ with tab3:
             st.caption(f"ZR = {ZR_MAP[r0_fl]}")
         with c2: so_fl = st.number_input("So", value=0.45, step=0.01, min_value=0.3, max_value=0.6, key="so_fl")
         with c3: pi_fl = st.number_input("Pi", value=4.2, step=0.1, key="pi_fl")
-        with c4: pt_fl2 = st.number_input("Pt", value=2.5, step=0.1, key="pt_fl2")
+        with c4: pt_fl2 = st.number_input("Pt", value=float(ss.pt_global), step=0.1, key="pt_fl2",
+                                           help="Default จาก TAB 1 — แก้ได้")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_fr:
@@ -1370,54 +1393,73 @@ with tab3:
                     st.error("ไม่สามารถคำนวณ SN Required ได้ — ตรวจสอบ ESAL และ Mr")
 
 # ══════════════════════════════════════════════
-#  TAB 4: K-VALUE NOMOGRAPH (Upload Image + Slider)
+#  TAB 4: RIGID DESIGN (รวม K-Nomograph ไว้ด้านใน)
 # ══════════════════════════════════════════════
 with tab4:
-    st.markdown("### 📐 K-Value Nomograph — AASHTO 1993")
+    st.markdown("### 🏗️ Rigid Pavement Design — AASHTO 1993")
     st.markdown("""
     <div class="result-info">
-        💡 <b>วิธีใช้:</b> Upload รูป Nomograph จาก AASHTO 1993 แล้วใช้ Slider วาดเส้นอ่านค่า
-        → Tab k∞ ใช้ <b>Fig.3.3</b> | Tab Loss of Support ใช้ <b>Fig.3.4</b>
+        💡 <b>ขั้นตอน:</b> (1) กำหนด Layer Editor → ได้ DSB, ESB
+        → (2) K-Value Nomograph → ได้ k_eff
+        → (3) คำนวณ Slab Thickness D
     </div>
     """, unsafe_allow_html=True)
 
-    sub_kinf, sub_ls = st.tabs(["📊 Composite k∞ (Fig.3.3)", "📉 Loss of Support (Fig.3.4)"])
+    # ── Status bar ──
+    col_s1, col_s2, col_s3 = st.columns(3)
+    with col_s1:
+        st.markdown(status_badge('esal_rigid', 'ESAL Rigid'), unsafe_allow_html=True)
+    with col_s2:
+        st.markdown(status_badge('k_subgrade_pci', 'k_subgrade'), unsafe_allow_html=True)
+    with col_s3:
+        st.markdown(status_badge('cbr_design', 'CBR/Mr'), unsafe_allow_html=True)
 
-    # ─────────────────────────────────────────
-    #  Sub-tab A: Composite k∞
-    # ─────────────────────────────────────────
-    with sub_kinf:
-        from PIL import Image as PILImage, ImageDraw as PILDraw
+    st.markdown("---")
 
-        # Upload หรือโหลดจาก session
-        uploaded_k = st.file_uploader(
-            "📂 Upload ภาพ Figure 3.3 (Composite k∞)",
-            type=['png','jpg','jpeg'], key='uploader_kinf'
-        )
-        if uploaded_k is not None:
-            raw_k = uploaded_k.read()
-            ss['img1_original'] = raw_k
-        elif ss.get('img1_original'):
-            raw_k = ss['img1_original']
-        else:
-            raw_k = None
+    # ════════════════════════════════════════
+    #  SECTION A: K-Value Nomograph (embedded)
+    # ════════════════════════════════════════
+    with st.expander("📐 SECTION A — K-Value Nomograph (Fig.3.3 & Fig.3.4)", expanded=True):
+        st.markdown("""
+        <div class="result-info">
+            💡 กำหนด Layer ก่อน (Section B) เพื่อให้ได้ DSB และ ESB → แล้วกลับมาลาก Nomograph ที่นี่
+        </div>
+        """, unsafe_allow_html=True)
 
-        if raw_k:
-            img1 = PILImage.open(io.BytesIO(raw_k)).convert("RGB")
-            w1, h1 = img1.size
-            img1_draw = img1.copy()
-            draw1 = PILDraw.Draw(img1_draw)
+        sub_kinf, sub_ls = st.tabs(["📊 Composite k∞ (Fig.3.3)", "📉 Loss of Support (Fig.3.4)"])
 
-            col_ctrl1, col_img1 = st.columns([1, 2])
+        # ─── Sub-tab A: Composite k∞ ───
+        with sub_kinf:
+            from PIL import Image as PILImage, ImageDraw as PILDraw
 
-            with col_ctrl1:
-                st.markdown('<div class="card"><h4>⚙️ ปรับเส้นอ่านค่า</h4>', unsafe_allow_html=True)
+            uploaded_k = st.file_uploader(
+                "📂 Upload ภาพ Figure 3.3 (Composite k∞)",
+                type=['png','jpg','jpeg'], key='uploader_kinf'
+            )
+            if uploaded_k is not None:
+                raw_k = uploaded_k.read()
+                ss['img1_original'] = raw_k
+            elif ss.get('img1_original'):
+                raw_k = ss['img1_original']
+            else:
+                raw_k = None
 
-                with st.expander("1. เส้น Turning Line (เขียว)", expanded=True):
-                    gx1 = st.slider("X เริ่ม", 0, w1, ss.get('gx1', int(w1*0.40)), key="gx1")
-                    gy1 = st.slider("Y เริ่ม", 0, h1, ss.get('gy1', int(h1*0.45)), key="gy1")
-                    gx2 = st.slider("X จบ",   0, w1, ss.get('gx2', int(w1*0.45)), key="gx2")
-                    gy2 = st.slider("Y จบ",   0, h1, ss.get('gy2', int(h1*0.52)), key="gy2")
+            if raw_k:
+                img1 = PILImage.open(io.BytesIO(raw_k)).convert("RGB")
+                w1, h1 = img1.size
+                img1_draw = img1.copy()
+                draw1 = PILDraw.Draw(img1_draw)
+
+                col_ctrl1, col_img1 = st.columns([1, 2])
+
+                with col_ctrl1:
+                    st.markdown('<div class="card"><h4>⚙️ ปรับเส้นอ่านค่า</h4>', unsafe_allow_html=True)
+
+                    with st.expander("1. เส้น Turning Line (เขียว)", expanded=True):
+                        gx1 = st.slider("X เริ่ม", 0, w1, ss.get('gx1', int(w1*0.40)), key="gx1")
+                        gy1 = st.slider("Y เริ่ม", 0, h1, ss.get('gy1', int(h1*0.45)), key="gy1")
+                        gx2 = st.slider("X จบ",   0, w1, ss.get('gx2', int(w1*0.45)), key="gx2")
+                        gy2 = st.slider("Y จบ",   0, h1, ss.get('gy2', int(h1*0.52)), key="gy2")
                     draw1.line([(gx1,gy1),(gx2,gy2)], fill="green", width=5)
                     slope_g = (gy2-gy1)/(gx2-gx1) if (gx2-gx1) != 0 else 0
 
@@ -1476,185 +1518,174 @@ with tab4:
 
                 st.markdown('</div>', unsafe_allow_html=True)
 
-            with col_img1:
-                if ss.get('k_inf'):
-                    st.markdown(f'<div class="result-pass" style="margin-bottom:0.5rem;">k∞ ปัจจุบัน = <b>{ss.k_inf:.0f} pci</b></div>', unsafe_allow_html=True)
-                st.image(img1_draw, caption="Composite k∞ Nomograph (AASHTO 1993 Fig.3.3)", use_container_width=True)
+                with col_img1:
+                    if ss.get('k_inf'):
+                        st.markdown(f'<div class="result-pass" style="margin-bottom:0.5rem;">k∞ ปัจจุบัน = <b>{ss.k_inf:.0f} pci</b></div>', unsafe_allow_html=True)
+                    st.image(img1_draw, caption="Composite k∞ Nomograph (AASHTO 1993 Fig.3.3)", use_container_width=True)
 
-                # Save annotated image
-                buf1b = io.BytesIO()
-                img1_draw.save(buf1b, format='PNG')
-                ss['nomograph_img_k'] = buf1b.getvalue()
-        else:
-            st.markdown("""
-            <div class="result-warn">
-                👆 กรุณา Upload รูป <b>Figure 3.3</b> จาก AASHTO 1993 Guide<br>
-                <small>รองรับ PNG, JPG, JPEG</small>
-            </div>
-            """, unsafe_allow_html=True)
-            # Fallback: กรอก k∞ ตรงๆ
-            st.markdown('<div class="card"><h4>📝 หรือกรอกค่า k∞ โดยตรง</h4>', unsafe_allow_html=True)
-            k_inf_manual = st.number_input("k∞ (pci)", value=float(ss.k_inf) if ss.k_inf else 200.0,
-                                            step=10.0, min_value=10.0, key="k_inf_manual")
-            if st.button("✅ ใช้ค่านี้", key="use_kinf_manual"):
-                ss.k_inf = k_inf_manual
-                st.success(f"✅ k∞ = {k_inf_manual:.0f} pci บันทึกแล้ว")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-    # ─────────────────────────────────────────
-    #  Sub-tab B: Loss of Support
-    # ─────────────────────────────────────────
-    with sub_ls:
-        from PIL import Image as PILImage, ImageDraw as PILDraw
-
-        st.markdown(f'<div class="result-info">k∞ จาก Tab k∞ = <b>{ss.k_inf:.0f} pci</b></div>', unsafe_allow_html=True)
-
-        uploaded_ls = st.file_uploader(
-            "📂 Upload ภาพ Figure 3.4 (Loss of Support)",
-            type=['png','jpg','jpeg'], key='uploader_ls'
-        )
-        if uploaded_ls is not None:
-            raw_ls = uploaded_ls.read()
-            ss['img2_original'] = raw_ls
-        elif ss.get('img2_original'):
-            raw_ls = ss['img2_original']
-        else:
-            raw_ls = None
-
-        if raw_ls:
-            img2 = PILImage.open(io.BytesIO(raw_ls)).convert("RGB")
-            w2, h2 = img2.size
-            img2_draw = img2.copy()
-            draw2 = PILDraw.Draw(img2_draw)
-
-            col_ctrl2, col_img2 = st.columns([1, 2])
-
-            with col_ctrl2:
-                st.markdown('<div class="card"><h4>⚙️ กำหนดเส้นกราฟ</h4>', unsafe_allow_html=True)
-
-                # LS presets จาก Rigid_Pavement__3_.py
-                LS_PRESETS_LOCAL = {
-                    0.0: (138, 715, 753, 84),
-                    0.5: (129, 728, 908,  0),
-                    1.0: (150, 718, 903, 84),
-                    1.5: (153, 721, 928,138),
-                    2.0: (164, 718, 929,220),
-                    3.0: (212, 719, 929,328),
-                }
-                ls_opts = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0]
-                cur_ls  = ss.get('ls_select_box', 1.0)
-                def_idx = ls_opts.index(cur_ls) if cur_ls in ls_opts else 2
-                ls_sel  = st.selectbox("เลือกค่า LS", ls_opts, index=def_idx, key="ls_select_box")
-
-                # Auto-preset เมื่อ LS เปลี่ยน
-                if ss.get('last_ls_select') != ls_sel:
-                    ss['last_ls_select'] = ls_sel
-                    coords = LS_PRESETS_LOCAL.get(ls_sel, (150,718,903,84))
-                    ss['_ls_x1'], ss['_ls_y1'] = coords[0], coords[1]
-                    ss['_ls_x2'], ss['_ls_y2'] = coords[2], coords[3]
-
-                with st.expander("ปรับแต่งเส้น LS ละเอียด", expanded=False):
-                    ls_x1 = st.slider("จุดเริ่ม X", -100, w2+100, ss.get('_ls_x1', 150), key="_ls_x1")
-                    ls_y1 = st.slider("จุดเริ่ม Y", -100, h2+100, ss.get('_ls_y1', 718), key="_ls_y1")
-                    ls_x2 = st.slider("จุดจบ X",   -100, w2+100, ss.get('_ls_x2', 903), key="_ls_x2")
-                    ls_y2 = st.slider("จุดจบ Y",   -100, h2+100, ss.get('_ls_y2',  84), key="_ls_y2")
-
-                draw2.line([(ls_x1,ls_y1),(ls_x2,ls_y2)], fill="red", width=6)
-                m_red = (ls_y2-ls_y1)/(ls_x2-ls_x1) if ls_x2-ls_x1 != 0 else None
-                c_red = ls_y1 - m_red*ls_x1 if m_red else 0
-
-                st.markdown("---")
-                with st.expander("📍 ตั้งค่าตำแหน่งแกนกราฟ", expanded=True):
-                    axis_left_x  = st.number_input("ตำแหน่งแกน Y (ซ้ายสุด)", value=ss.get('axis_left',100),     step=5, key="axis_left")
-                    axis_bottom_y= st.number_input("ตำแหน่งแกน X (ล่างสุด)", value=ss.get('axis_bottom',h2-50), step=5, key="axis_bottom")
-
-                st.caption(f"k∞ จาก Tab ก่อนหน้า = {ss.k_inf:.0f} pci")
-                k_pos_x   = st.slider("ตำแหน่ง k∞ บนแกน X", 0, w2, ss.get('k_pos_x', w2//2), key="k_pos_x")
-                intersect_y = int(m_red*k_pos_x + c_red) if m_red else h2//2
-
-                draw2.line([(k_pos_x,axis_bottom_y),(k_pos_x,intersect_y)], fill="blue", width=5)
-
-                def _arrow2(drw, start, end, color, lw=5, arrow=14):
-                    drw.line([start, end], fill=color, width=lw)
-                    dx=end[0]-start[0]; dy=end[1]-start[1]
-                    L=math.sqrt(dx*dx+dy*dy)
-                    if L>0:
-                        dx/=L; dy/=L; px=-dy; py=dx
-                        bx=end[0]-arrow*dx; by=end[1]-arrow*dy
-                        drw.polygon([(end[0],end[1]),(int(bx+arrow*0.5*px),int(by+arrow*0.5*py)),
-                                     (int(bx-arrow*0.5*px),int(by-arrow*0.5*py))], fill=color)
-
-                _arrow2(draw2, (k_pos_x, intersect_y), (int(axis_left_x), intersect_y), "blue")
-                draw2.ellipse([(k_pos_x-8,intersect_y-8),(k_pos_x+8,intersect_y+8)],
-                               fill="black", outline="white", width=2)
-
-                st.markdown('</div>', unsafe_allow_html=True)
-                st.markdown('<div class="card"><h4>📝 บันทึกผลลัพธ์</h4>', unsafe_allow_html=True)
-
-                k_corr_val = st.number_input(
-                    "k_eff Corrected (pci)",
-                    value=int(ss.get('k_corrected', max(10, ss.k_inf - 100)) if ss.k_inf else 200),
-                    step=10, min_value=10, key="k_corr_input"
-                )
-                if k_corr_val > ss.k_inf and ss.k_inf > 0:
-                    st.warning(f"⚠️ k_eff ({k_corr_val:.0f}) ต้องไม่เกิน k∞ ({ss.k_inf:.0f} pci)")
-                    k_corr_val = ss.k_inf
-
-                if st.button("✅ บันทึก k_eff", type="primary", key="save_keff"):
-                    ss.k_corrected = float(k_corr_val)
-                    ss.ls_value    = ls_sel
-                    buf2 = io.BytesIO()
-                    img2_draw.save(buf2, format='PNG')
-                    ss['nomograph_img_ls'] = buf2.getvalue()
-                    ss['img2_original']    = raw_ls
-                    st.markdown(f'<div class="result-pass">k_eff = <b>{k_corr_val} pci</b> (LS={ls_sel}) บันทึกแล้ว → ใช้ใน Tab Rigid Design</div>', unsafe_allow_html=True)
-
+                    # Save annotated image
+                    buf1b = io.BytesIO()
+                    img1_draw.save(buf1b, format='PNG')
+                    ss['nomograph_img_k'] = buf1b.getvalue()
+            else:
+                st.markdown("""
+                <div class="result-warn">
+                    👆 กรุณา Upload รูป <b>Figure 3.3</b> จาก AASHTO 1993 Guide<br>
+                    <small>รองรับ PNG, JPG, JPEG</small>
+                </div>
+                """, unsafe_allow_html=True)
+                # Fallback: กรอก k∞ ตรงๆ
+                st.markdown('<div class="card"><h4>📝 หรือกรอกค่า k∞ โดยตรง</h4>', unsafe_allow_html=True)
+                k_inf_manual = st.number_input("k∞ (pci)", value=float(ss.k_inf) if ss.k_inf else 200.0,
+                                                step=10.0, min_value=10.0, key="k_inf_manual")
+                if st.button("✅ ใช้ค่านี้", key="use_kinf_manual"):
+                    ss.k_inf = k_inf_manual
+                    st.success(f"✅ k∞ = {k_inf_manual:.0f} pci บันทึกแล้ว")
                 st.markdown('</div>', unsafe_allow_html=True)
 
-            with col_img2:
-                if ss.get('k_corrected'):
-                    st.markdown(f'<div class="result-pass" style="margin-bottom:0.5rem;">k_eff = <b>{ss.k_corrected:.0f} pci</b>  |  LS = {ss.ls_value}</div>', unsafe_allow_html=True)
-                st.image(img2_draw, caption=f"Loss of Support (LS={ls_sel}) — AASHTO 1993 Fig.3.4", use_container_width=True)
+        # ─────────────────────────────────────────
+        #  Sub-tab B: Loss of Support
+        # ─────────────────────────────────────────
+        with sub_ls:
+            from PIL import Image as PILImage, ImageDraw as PILDraw
 
-                buf2b = io.BytesIO()
-                img2_draw.save(buf2b, format='PNG')
-                ss['nomograph_img_ls'] = buf2b.getvalue()
-        else:
-            st.markdown("""
-            <div class="result-warn">
-                👆 กรุณา Upload รูป <b>Figure 3.4</b> จาก AASHTO 1993 Guide<br>
-                <small>รองรับ PNG, JPG, JPEG</small>
-            </div>
-            """, unsafe_allow_html=True)
-            st.markdown('<div class="card"><h4>📝 หรือกรอกค่า k_eff โดยตรง</h4>', unsafe_allow_html=True)
-            ls_opts2 = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0]
-            ls_man   = st.select_slider("Loss of Support (LS)", ls_opts2,
-                                        value=ss.ls_value if ss.ls_value in ls_opts2 else 1.0,
-                                        key="ls_manual")
-            k_eff_man= st.number_input("k_eff (pci)", value=float(ss.k_corrected) if ss.k_corrected else 200.0,
-                                        step=10.0, min_value=10.0, key="k_eff_manual")
-            if st.button("✅ ใช้ค่านี้", key="use_keff_manual"):
-                ss.k_corrected = k_eff_man
-                ss.ls_value    = ls_man
-                st.success(f"✅ k_eff = {k_eff_man:.0f} pci บันทึกแล้ว")
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="result-info">k∞ จาก Tab k∞ = <b>{ss.k_inf:.0f} pci</b></div>', unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════
-#  TAB 5: RIGID DESIGN (JPCP / JRCP / CRCP)
-# ══════════════════════════════════════════════
-with tab5:
-    st.markdown("### 🏗️ Rigid Pavement Design — AASHTO 1993")
+            uploaded_ls = st.file_uploader(
+                "📂 Upload ภาพ Figure 3.4 (Loss of Support)",
+                type=['png','jpg','jpeg'], key='uploader_ls'
+            )
+            if uploaded_ls is not None:
+                raw_ls = uploaded_ls.read()
+                ss['img2_original'] = raw_ls
+            elif ss.get('img2_original'):
+                raw_ls = ss['img2_original']
+            else:
+                raw_ls = None
 
-    # ── Status bar ──
-    col_s1, col_s2, col_s3 = st.columns(3)
-    with col_s1:
-        st.markdown(status_badge('esal_rigid', 'ESAL Rigid'), unsafe_allow_html=True)
-    with col_s2:
-        st.markdown(status_badge('k_corrected', 'k_eff'), unsafe_allow_html=True)
-    with col_s3:
-        st.markdown(status_badge('cbr_design', 'CBR/Mr'), unsafe_allow_html=True)
+            if raw_ls:
+                img2 = PILImage.open(io.BytesIO(raw_ls)).convert("RGB")
+                w2, h2 = img2.size
+                img2_draw = img2.copy()
+                draw2 = PILDraw.Draw(img2_draw)
 
+                col_ctrl2, col_img2 = st.columns([1, 2])
+
+                with col_ctrl2:
+                    st.markdown('<div class="card"><h4>⚙️ กำหนดเส้นกราฟ</h4>', unsafe_allow_html=True)
+
+                    # LS presets จาก Rigid_Pavement__3_.py
+                    LS_PRESETS_LOCAL = {
+                        0.0: (138, 715, 753, 84),
+                        0.5: (129, 728, 908,  0),
+                        1.0: (150, 718, 903, 84),
+                        1.5: (153, 721, 928,138),
+                        2.0: (164, 718, 929,220),
+                        3.0: (212, 719, 929,328),
+                    }
+                    ls_opts = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0]
+                    cur_ls  = ss.get('ls_select_box', 1.0)
+                    def_idx = ls_opts.index(cur_ls) if cur_ls in ls_opts else 2
+                    ls_sel  = st.selectbox("เลือกค่า LS", ls_opts, index=def_idx, key="ls_select_box")
+
+                    # Auto-preset เมื่อ LS เปลี่ยน
+                    if ss.get('last_ls_select') != ls_sel:
+                        ss['last_ls_select'] = ls_sel
+                        coords = LS_PRESETS_LOCAL.get(ls_sel, (150,718,903,84))
+                        ss['_ls_x1'], ss['_ls_y1'] = coords[0], coords[1]
+                        ss['_ls_x2'], ss['_ls_y2'] = coords[2], coords[3]
+
+                    with st.expander("ปรับแต่งเส้น LS ละเอียด", expanded=False):
+                        ls_x1 = st.slider("จุดเริ่ม X", -100, w2+100, ss.get('_ls_x1', 150), key="_ls_x1")
+                        ls_y1 = st.slider("จุดเริ่ม Y", -100, h2+100, ss.get('_ls_y1', 718), key="_ls_y1")
+                        ls_x2 = st.slider("จุดจบ X",   -100, w2+100, ss.get('_ls_x2', 903), key="_ls_x2")
+                        ls_y2 = st.slider("จุดจบ Y",   -100, h2+100, ss.get('_ls_y2',  84), key="_ls_y2")
+
+                    draw2.line([(ls_x1,ls_y1),(ls_x2,ls_y2)], fill="red", width=6)
+                    m_red = (ls_y2-ls_y1)/(ls_x2-ls_x1) if ls_x2-ls_x1 != 0 else None
+                    c_red = ls_y1 - m_red*ls_x1 if m_red else 0
+
+                    st.markdown("---")
+                    with st.expander("📍 ตั้งค่าตำแหน่งแกนกราฟ", expanded=True):
+                        axis_left_x  = st.number_input("ตำแหน่งแกน Y (ซ้ายสุด)", value=ss.get('axis_left',100),     step=5, key="axis_left")
+                        axis_bottom_y= st.number_input("ตำแหน่งแกน X (ล่างสุด)", value=ss.get('axis_bottom',h2-50), step=5, key="axis_bottom")
+
+                    st.caption(f"k∞ จาก Tab ก่อนหน้า = {ss.k_inf:.0f} pci")
+                    k_pos_x   = st.slider("ตำแหน่ง k∞ บนแกน X", 0, w2, ss.get('k_pos_x', w2//2), key="k_pos_x")
+                    intersect_y = int(m_red*k_pos_x + c_red) if m_red else h2//2
+
+                    draw2.line([(k_pos_x,axis_bottom_y),(k_pos_x,intersect_y)], fill="blue", width=5)
+
+                    def _arrow2(drw, start, end, color, lw=5, arrow=14):
+                        drw.line([start, end], fill=color, width=lw)
+                        dx=end[0]-start[0]; dy=end[1]-start[1]
+                        L=math.sqrt(dx*dx+dy*dy)
+                        if L>0:
+                            dx/=L; dy/=L; px=-dy; py=dx
+                            bx=end[0]-arrow*dx; by=end[1]-arrow*dy
+                            drw.polygon([(end[0],end[1]),(int(bx+arrow*0.5*px),int(by+arrow*0.5*py)),
+                                         (int(bx-arrow*0.5*px),int(by-arrow*0.5*py))], fill=color)
+
+                    _arrow2(draw2, (k_pos_x, intersect_y), (int(axis_left_x), intersect_y), "blue")
+                    draw2.ellipse([(k_pos_x-8,intersect_y-8),(k_pos_x+8,intersect_y+8)],
+                                   fill="black", outline="white", width=2)
+
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="card"><h4>📝 บันทึกผลลัพธ์</h4>', unsafe_allow_html=True)
+
+                    k_corr_val = st.number_input(
+                        "k_eff Corrected (pci)",
+                        value=int(ss.get('k_corrected', max(10, ss.k_inf - 100)) if ss.k_inf else 200),
+                        step=10, min_value=10, key="k_corr_input"
+                    )
+                    if k_corr_val > ss.k_inf and ss.k_inf > 0:
+                        st.warning(f"⚠️ k_eff ({k_corr_val:.0f}) ต้องไม่เกิน k∞ ({ss.k_inf:.0f} pci)")
+                        k_corr_val = ss.k_inf
+
+                    if st.button("✅ บันทึก k_eff", type="primary", key="save_keff"):
+                        ss.k_corrected = float(k_corr_val)
+                        ss.ls_value    = ls_sel
+                        buf2 = io.BytesIO()
+                        img2_draw.save(buf2, format='PNG')
+                        ss['nomograph_img_ls'] = buf2.getvalue()
+                        ss['img2_original']    = raw_ls
+                        st.markdown(f'<div class="result-pass">k_eff = <b>{k_corr_val} pci</b> (LS={ls_sel}) บันทึกแล้ว → ใช้ใน Tab Rigid Design</div>', unsafe_allow_html=True)
+
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+                with col_img2:
+                    if ss.get('k_corrected'):
+                        st.markdown(f'<div class="result-pass" style="margin-bottom:0.5rem;">k_eff = <b>{ss.k_corrected:.0f} pci</b>  |  LS = {ss.ls_value}</div>', unsafe_allow_html=True)
+                    st.image(img2_draw, caption=f"Loss of Support (LS={ls_sel}) — AASHTO 1993 Fig.3.4", use_container_width=True)
+
+                    buf2b = io.BytesIO()
+                    img2_draw.save(buf2b, format='PNG')
+                    ss['nomograph_img_ls'] = buf2b.getvalue()
+            else:
+                st.markdown("""
+                <div class="result-warn">
+                    👆 กรุณา Upload รูป <b>Figure 3.4</b> จาก AASHTO 1993 Guide<br>
+                    <small>รองรับ PNG, JPG, JPEG</small>
+                </div>
+                """, unsafe_allow_html=True)
+                st.markdown('<div class="card"><h4>📝 หรือกรอกค่า k_eff โดยตรง</h4>', unsafe_allow_html=True)
+                ls_opts2 = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0]
+                ls_man   = st.select_slider("Loss of Support (LS)", ls_opts2,
+                                            value=ss.ls_value if ss.ls_value in ls_opts2 else 1.0,
+                                            key="ls_manual")
+                k_eff_man= st.number_input("k_eff (pci)", value=float(ss.k_corrected) if ss.k_corrected else 200.0,
+                                            step=10.0, min_value=10.0, key="k_eff_manual")
+                if st.button("✅ ใช้ค่านี้", key="use_keff_manual"):
+                    ss.k_corrected = k_eff_man
+                    ss.ls_value    = ls_man
+                    st.success(f"✅ k_eff = {k_eff_man:.0f} pci บันทึกแล้ว")
+                st.markdown('</div>', unsafe_allow_html=True)
+
+    # ════════════════════════════════════════
+    #  SECTION B: Rigid Design Parameters
+    # ════════════════════════════════════════
     st.markdown("---")
+    st.markdown("### ⚙️ SECTION B — Design Parameters & Slab Thickness")
 
     # ── Shared design parameters ──
     st.markdown('<div class="card"><h4>⚙️ พารามิเตอร์ร่วม (ใช้กับทุก Type)</h4>', unsafe_allow_html=True)
@@ -1678,7 +1709,8 @@ with tab5:
     with rp5:
         pi_rig = st.number_input("Pi", value=4.5, step=0.1, key="pi_rig")
     with rp6:
-        pt_rig2 = st.number_input("Pt", value=2.5, step=0.1, key="pt_rig2")
+        pt_rig2 = st.number_input("Pt", value=float(ss.pt_global), step=0.1,
+                                   key="pt_rig2", help="Default จาก TAB 1 — แก้ได้")
 
     st.markdown(
         f"Ec = **{ec_psi:,.0f} psi** &nbsp;|&nbsp; "
@@ -1687,17 +1719,18 @@ with tab5:
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── Sub-tabs JPCP / JRCP / CRCP ──
-    sub_jpcp, sub_jrcp, sub_crcp = st.tabs(["🟦 JPCP", "🟧 JRCP", "🟥 CRCP"])
+    # ── Sub-tabs JPCP/JRCP | CRCP ──
+    sub_jpcp_jrcp, sub_crcp = st.tabs(["🟦 JPCP / JRCP", "🟥 CRCP"])
 
     def rigid_design_panel(ptype, tab_key):
         """
         Panel ออกแบบ Rigid Pavement แต่ละประเภท
         - Layer editor: วัสดุ + หนา + E_MPa (auto-fill แก้ไขได้)
-        - คำนวณ E_eq, DSB → ส่งไป session state (Tab K-Value ดึงได้)
+        - คำนวณ E_eq, DSB → ส่งไป session state
         - ดึง ESAL, k_eff อัตโนมัติ แก้ไขได้
         """
-        j_default  = J_VALUES[ptype]
+        j_key = "JPCP/JRCP" if ptype in ("JPCP", "JRCP") else "CRCP"
+        j_default  = J_VALUES[j_key]
         mat_opts   = list(RIGID_LAYER_MATERIALS.keys())
 
         col_rd_l, col_rd_r = st.columns([1.1, 1])
@@ -1807,10 +1840,12 @@ with tab5:
 
             pr1, pr2 = st.columns(2)
             with pr1:
+                j_hint = "default 2.8, ช่วง 2.5–3.2 (กรมทางหลวง)" if ptype != "CRCP" else "default 2.6, ช่วง 2.5–3.2 (กรมทางหลวง)"
                 j_val  = st.number_input(
                     f"J ({ptype})", value=j_default,
                     step=0.1, min_value=1.0, max_value=5.0,
-                    key=f"j_{tab_key}"
+                    key=f"j_{tab_key}",
+                    help=j_hint
                 )
                 cd_val = st.number_input(
                     "Cd (Drainage)", value=1.0, step=0.05,
@@ -1967,17 +2002,21 @@ with tab5:
                                 </div>""", unsafe_allow_html=True)
 
     # ── เรียก panel แต่ละประเภท ──
-    with sub_jpcp:
-        rigid_design_panel("JPCP", "jpcp")
-    with sub_jrcp:
-        rigid_design_panel("JRCP", "jrcp")
+    with sub_jpcp_jrcp:
+        st.markdown("""
+        <div class="result-info">
+            💡 <b>JPCP และ JRCP</b> ใช้สมการเดียวกัน — ต่างกันเฉพาะงานก่อสร้าง
+            (JPCP = ไม่มีเหล็กตะแกรง | JRCP = มีเหล็กตะแกรง)
+        </div>
+        """, unsafe_allow_html=True)
+        rigid_design_panel("JPCP", "jpcp_jrcp")
     with sub_crcp:
         rigid_design_panel("CRCP", "crcp")
 
 # ══════════════════════════════════════════════
-#  TAB 6: REPORT & SAVE
+#  TAB 5: REPORT & SAVE
 # ══════════════════════════════════════════════
-with tab6:
+with tab5:
     st.markdown("### 📄 Report & Save — Word / JSON")
 
     if not DOCX_OK:
