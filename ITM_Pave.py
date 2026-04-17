@@ -7,7 +7,7 @@
 # ║  TAB 2 │ CBR Analysis (Percentile)                             ║
 # ║  TAB 3 │ Flexible Pavement Design                              ║
 # ║  TAB 4 │ Rigid Design (K-Nomograph + JPCP/JRCP + CRCP)        ║
-# ║  TAB 5 │ Report & Save (Word + JSON)       ปรับปรุง ครั้งที่ 2.1 ║
+# ║  TAB 5 │ Report & Save (Word + JSON)       ปรับปรุง ครั้งที่ 2.1   ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 # ─────────────────────────────────────────────
