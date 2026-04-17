@@ -958,9 +958,6 @@ with tab1:
         )
         if pt_global != ss.pt_global:
             ss.pt_global = pt_global
-            # sync ไปยัง TAB3 และ TAB4 — reset widget values
-            ss['pt_fl2']  = pt_global
-            ss['pt_rig2'] = pt_global
     with pt_g_col2:
         st.markdown(f"""
         <div class="result-info" style="margin-top:1.6rem;">
@@ -1327,55 +1324,43 @@ with tab3:
             st.caption(f"ZR = {ZR_MAP[r0_fl]}")
         with c2: so_fl = st.number_input("So", value=0.45, step=0.01, min_value=0.3, max_value=0.6, key="so_fl")
         with c3: pi_fl = st.number_input("Pi", value=4.2, step=0.1, key="pi_fl")
-        with c4: pt_fl2 = st.number_input("Pt", value=float(ss.get("pt_fl2", ss.pt_global)), step=0.1, key="pt_fl2",
+        with c4: pt_fl2 = st.number_input("Pt", value=float(ss.pt_global), step=0.1, key="pt_fl2",
                                            help="Default จาก TAB 1 — แก้ได้")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_fr:
         st.markdown('<div class="card"><h4>🔩 Layer Design</h4>', unsafe_allow_html=True)
+        hcols = st.columns([3, 1.5, 0.8, 0.8, 0.9, 1.1])
+        for txt, col in zip(["**วัสดุ**","**หนา(cm)**","**ai**","**mi**","**SNi**","**ΣSNi**"], hcols):
+            col.markdown(txt)
 
-        # Header
-        hc0, hc1, hc2 = st.columns([3, 1, 4])
-        hc0.markdown("**วัสดุ**")
-        hc1.markdown("**หนา (cm)**")
-        hc2.markdown("**ผลคำนวณ**")
-
-        mat_options   = list(FLEX_LAYER_MATERIALS.keys())
+        mat_options = list(FLEX_LAYER_MATERIALS.keys())
         layer_results = []
-        cum_sn        = 0.0
+        cum_sn = 0.0
 
         for li in range(6):
-            lc0, lc1, lc2 = st.columns([3, 1, 4])
+            lc0, lc1 = st.columns([3, 1.5])
             with lc0:
-                mat_f = st.selectbox(f"L{li+1}", mat_options,
-                                     key=f"fmat_{li}", label_visibility="collapsed")
+                mat_f = st.selectbox(f"L{li+1}", mat_options, key=f"fmat_{li}", label_visibility="collapsed")
             with lc1:
-                h_f = st.number_input("cm", value=0, step=1, min_value=0,
-                                      key=f"fh_{li}", label_visibility="collapsed")
-            with lc2:
-                if mat_f != "None" and h_f > 0:
-                    ai, mi = FLEX_LAYER_MATERIALS[mat_f]
-                    h_in   = h_f / 2.54
-                    sn_i   = ai * h_in * mi
-                    cum_sn += sn_i
-                    layer_results.append({
-                        'layer': li+1, 'material': mat_f,
-                        'h_cm': h_f, 'ai': ai, 'mi': mi,
-                        'sni': round(sn_i,3), 'cum_sn': round(cum_sn,3)
-                    })
-                    st.markdown(
-                        f'<div style="padding:0.35rem 0.5rem;font-size:0.82rem;'
-                        f'font-family:monospace;background:var(--color-background-secondary);'
-                        f'border-radius:6px;margin-top:0.25rem;">'
-                        f'<b>{h_f} cm</b> | ai={ai:.2f} | mi={mi:.1f} | '
-                        f'SNi={sn_i:.3f} | <b>ΣSNi={cum_sn:.3f}</b>'
-                        f'</div>',
-                        unsafe_allow_html=True
-                    )
-                else:
-                    st.markdown("")
+                h_f = st.number_input("cm", value=0, step=1, min_value=0, key=f"fh_{li}", label_visibility="collapsed")
 
-        st.markdown(f"""<div class="result-info" style="margin-top:0.5rem;">
+            if mat_f != "None" and h_f > 0:
+                ai, mi = FLEX_LAYER_MATERIALS[mat_f]
+                h_in   = h_f / 2.54
+                sn_i   = ai * h_in * mi
+                cum_sn += sn_i
+                layer_results.append({
+                    'layer': li+1, 'material': mat_f,
+                    'h_cm': h_f, 'ai': ai, 'mi': mi,
+                    'sni': round(sn_i,3), 'cum_sn': round(cum_sn,3)
+                })
+                _, d1,d2,d3,d4,d5 = st.columns([3, 1.5, 0.8, 0.8, 0.9, 1.1])
+                d1.markdown(f"`{h_f} cm`"); d2.markdown(f"`{ai:.2f}`")
+                d3.markdown(f"`{mi:.1f}`"); d4.markdown(f"`{sn_i:.3f}`")
+                d5.markdown(f"**`{cum_sn:.3f}`**")
+
+        st.markdown(f"""<div class="result-info">
             ΣSN Provided = <b>{cum_sn:.3f}</b>
         </div>""", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1726,7 +1711,7 @@ with tab4:
     with rp5:
         pi_rig = st.number_input("Pi", value=4.5, step=0.1, key="pi_rig")
     with rp6:
-        pt_rig2 = st.number_input("Pt", value=float(ss.get("pt_rig2", ss.pt_global)), step=0.1,
+        pt_rig2 = st.number_input("Pt", value=float(ss.pt_global), step=0.1,
                                    key="pt_rig2", help="Default จาก TAB 1 — แก้ได้")
 
     st.markdown(
@@ -1788,6 +1773,8 @@ with tab4:
                         label_visibility="collapsed"
                     )
                 with lc_c:
+                    # Auto-fill E_MPa: ติดตาม material ที่เลือก
+                    # ถ้า material เปลี่ยน → อัปเดต session state ทันที
                     prev_mat_key = f"_prev_mat_{tab_key}_{li}"
                     e_key        = f"re_{tab_key}_{li}"
                     e_default    = RIGID_LAYER_E_DEFAULT.get(mat_r, 100) if mat_r != "None" else 0
