@@ -215,39 +215,57 @@ ZR_MAP = {
 
 J_VALUES = {"JPCP/JRCP": 2.8, "CRCP": 2.6}
 
+# วัสดุที่ lock mi=1.0 (AC และ PMA)
+AC_MATERIALS_LOCK_MI = {
+    "ผิวทางลาดยาง PMA",
+    "ผิวทางแอสฟัลต์คอนกรีต (AC)",
+}
+
+# วัสดุ AC/PMA สำหรับ sub-layer checkbox
+AC_SURFACE_MATERIALS = {
+    "ผิวทางลาดยาง PMA",
+    "ผิวทางแอสฟัลต์คอนกรีต (AC)",
+}
+
 FLEX_LAYER_MATERIALS = {
-    "None":                                       (None, None),
-    "Asphalt Concrete (AC)":                      (0.42, 1.0),
-    "Cement Treated Base UCS 24.5 ksc":           (0.15, 1.0),
-    "Cement Treated Base UCS 17.5 ksc":           (0.13, 1.0),
-    "Crushed Rock Base CBR 80%":                  (0.14, 1.0),
-    "Soil Aggregate Subbase CBR 25%":             (0.10, 1.0),
-    "Soil Aggregate Subbase CBR 20%":             (0.09, 1.0),
-    "Soil Aggregate Subbase CBR 15%":             (0.08, 1.0),
-    "Sand Embankment CBR 10%":                    (0.08, 1.0),
+    "ไม่เลือก":                                              (None, None),
+    "ผิวทางลาดยาง PMA":                                      (0.44, 1.0),
+    "ผิวทางแอสฟัลต์คอนกรีต (AC)":                           (0.40, 1.0),
+    "พื้นทางหินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc (CTB)": (0.18, 1.0),
+    "พื้นทางหินคลุกผสมซีเมนต์ UCS 24.5 ksc":               (0.15, 1.0),
+    "พื้นทางดินซีเมนต์ UCS 17.5 ksc":                       (0.13, 1.0),
+    "พื้นทางหินคลุก CBR 80%":                               (0.14, 1.0),
+    "พื้นทางวัสดุหมุนเวียน (Recycling)":                    (0.15, 1.0),
+    "รองพื้นทางวัสดุมวลรวม CBR 25%":                        (0.10, 1.0),
+    "วัสดุคัดเลือก ก":                                       (0.08, 1.0),
+    "ดินถมคันทาง CBR 10%":                                   (0.08, 1.0),
 }
 
 RIGID_LAYER_MATERIALS = {
-    "None":                                       None,
-    "AC Interlayer":                              2500,
-    "Lean Concrete Base (LCB)":                  5000,
-    "Cement Treated Base UCS 24.5 ksc":          1200,
-    "Cement Treated Base UCS 17.5 ksc":           850,
-    "Crushed Rock Base CBR 80%":                  350,
-    "Soil Aggregate Subbase CBR 25%":             150,
-    "Embankment":                                 100,
+    "ไม่เลือก":                                               None,
+    "AC รองใต้ผิวคอนกรีต":                                   2500,
+    "พื้นทางวัสดุหมุนเวียน (Recycling)":                     850,
+    "พื้นทางหินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc (CTB)": 1200,
+    "พื้นทางหินคลุกผสมซีเมนต์ UCS 24.5 ksc":                850,
+    "พื้นทางดินซีเมนต์ UCS 17.5 ksc":                        350,
+    "พื้นทางหินคลุก CBR 80%":                                350,
+    "รองพื้นทางวัสดุมวลรวม CBR 25%":                         150,
+    "วัสดุคัดเลือก ก":                                        100,
+    "ดินถมคันทาง CBR 10%":                                    100,
 }
 
 # E_MPa default ต่อวัสดุ (สำหรับ auto-fill Layer Editor)
 RIGID_LAYER_E_DEFAULT = {
-    "None":                                       0,
-    "AC Interlayer":                              2500,
-    "Lean Concrete Base (LCB)":                  5000,
-    "Cement Treated Base UCS 24.5 ksc":          1200,
-    "Cement Treated Base UCS 17.5 ksc":           850,
-    "Crushed Rock Base CBR 80%":                  350,
-    "Soil Aggregate Subbase CBR 25%":             150,
-    "Embankment":                                 100,
+    "ไม่เลือก":                                               0,
+    "AC รองใต้ผิวคอนกรีต":                                   2500,
+    "พื้นทางวัสดุหมุนเวียน (Recycling)":                     850,
+    "พื้นทางหินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc (CTB)": 1200,
+    "พื้นทางหินคลุกผสมซีเมนต์ UCS 24.5 ksc":                850,
+    "พื้นทางดินซีเมนต์ UCS 17.5 ksc":                        350,
+    "พื้นทางหินคลุก CBR 80%":                                350,
+    "รองพื้นทางวัสดุมวลรวม CBR 25%":                         150,
+    "วัสดุคัดเลือก ก":                                        100,
+    "ดินถมคันทาง CBR 10%":                                    100,
 }
 
 SAMPLE_CBR = [14.8,14.37,5.31,17.37,5.48,18.46,4.85,6.23,
@@ -957,7 +975,9 @@ with tab1:
             help="ค่านี้จะเป็น default ใน TAB Flexible และ TAB Rigid — แก้ได้อิสระในแต่ละ TAB"
         )
         if pt_global != ss.pt_global:
-            ss.pt_global = pt_global
+            ss.pt_global  = pt_global
+            ss['_pt_sync'] = pt_global
+            st.rerun()
     with pt_g_col2:
         st.markdown(f"""
         <div class="result-info" style="margin-top:1.6rem;">
@@ -1324,43 +1344,132 @@ with tab3:
             st.caption(f"ZR = {ZR_MAP[r0_fl]}")
         with c2: so_fl = st.number_input("So", value=0.45, step=0.01, min_value=0.3, max_value=0.6, key="so_fl")
         with c3: pi_fl = st.number_input("Pi", value=4.2, step=0.1, key="pi_fl")
-        with c4: pt_fl2 = st.number_input("Pt", value=float(ss.pt_global), step=0.1, key="pt_fl2",
+        with c4: pt_fl2 = st.number_input("Pt", value=float(ss.get("_pt_sync", ss.pt_global)), step=0.1, key="pt_fl2",
                                            help="Default จาก TAB 1 — แก้ได้")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_fr:
         st.markdown('<div class="card"><h4>🔩 Layer Design</h4>', unsafe_allow_html=True)
-        hcols = st.columns([3, 1.5, 0.8, 0.8, 0.9, 1.1])
-        for txt, col in zip(["**วัสดุ**","**หนา(cm)**","**ai**","**mi**","**SNi**","**ΣSNi**"], hcols):
-            col.markdown(txt)
 
-        mat_options = list(FLEX_LAYER_MATERIALS.keys())
+        # Header
+        hc0, hc1, hc2, hc3 = st.columns([3, 1, 1, 4])
+        hc0.markdown("**วัสดุ**")
+        hc1.markdown("**หนา (cm)**")
+        hc2.markdown("**mi**")
+        hc3.markdown("**ผลคำนวณ**")
+
+        mat_options   = list(FLEX_LAYER_MATERIALS.keys())
         layer_results = []
-        cum_sn = 0.0
+        cum_sn        = 0.0
 
         for li in range(6):
-            lc0, lc1 = st.columns([3, 1.5])
+            lc0, lc1, lc2, lc3 = st.columns([3, 1, 1, 4])
             with lc0:
-                mat_f = st.selectbox(f"L{li+1}", mat_options, key=f"fmat_{li}", label_visibility="collapsed")
+                mat_f = st.selectbox(f"L{li+1}", mat_options,
+                                     key=f"fmat_{li}", label_visibility="collapsed")
             with lc1:
-                h_f = st.number_input("cm", value=0, step=1, min_value=0, key=f"fh_{li}", label_visibility="collapsed")
+                h_f = st.number_input("cm", value=0, step=1, min_value=0,
+                                      key=f"fh_{li}", label_visibility="collapsed")
+            with lc2:
+                is_ac = mat_f in AC_MATERIALS_LOCK_MI
+                if mat_f != "ไม่เลือก":
+                    if is_ac:
+                        st.markdown(
+                            '<div style="padding:0.4rem 0.3rem;font-size:0.82rem;'
+                            'text-align:center;color:var(--color-text-secondary);">'
+                            '1.0 🔒</div>',
+                            unsafe_allow_html=True
+                        )
+                        mi_f = 1.0
+                    else:
+                        mi_f = st.number_input(
+                            "mi", value=1.0, step=0.1,
+                            min_value=0.6, max_value=1.4,
+                            key=f"fmi_{li}", label_visibility="collapsed",
+                            format="%.1f"
+                        )
+                else:
+                    mi_f = 1.0
+                    st.markdown("")
+            with lc3:
+                if mat_f != "ไม่เลือก" and h_f > 0:
+                    ai, _ = FLEX_LAYER_MATERIALS[mat_f]
+                    # AC sub-layers
+                    if mat_f in AC_SURFACE_MATERIALS:
+                        do_sub = st.checkbox(
+                            "แบ่งชั้นย่อย", key=f"fsub_{li}",
+                            help="แบ่งเป็น Wearing / Binder / Base Course"
+                        )
+                        if do_sub:
+                            sc1, sc2, sc3 = st.columns(3)
+                            with sc1:
+                                h_wear = st.number_input("Wearing (cm)", value=5, step=1,
+                                                         min_value=0, key=f"fwear_{li}")
+                            with sc2:
+                                h_bind = st.number_input("Binder (cm)", value=7, step=1,
+                                                         min_value=0, key=f"fbind_{li}")
+                            with sc3:
+                                h_base = st.number_input("Base (cm)", value=10, step=1,
+                                                         min_value=0, key=f"fbase_{li}")
+                            h_total = h_wear + h_bind + h_base
+                            h_in_total = h_total / 2.54
+                            sn_i = ai * h_in_total * mi_f
+                            cum_sn += sn_i
+                            layer_results.append({
+                                'layer': li+1, 'material': mat_f,
+                                'h_cm': h_total, 'ai': ai, 'mi': mi_f,
+                                'sni': round(sn_i,3), 'cum_sn': round(cum_sn,3),
+                                'sub': {'wear': h_wear, 'bind': h_bind, 'base': h_base}
+                            })
+                            st.markdown(
+                                f'<div style="padding:0.35rem 0.5rem;font-size:0.80rem;'
+                                f'font-family:monospace;background:var(--color-background-secondary);'
+                                f'border-radius:6px;margin-top:0.2rem;">'
+                                f'Wearing={h_wear}+Binder={h_bind}+Base={h_base} = <b>{h_total} cm</b>'
+                                f' | ai={ai:.2f} | SNi={sn_i:.3f} | <b>ΣSNi={cum_sn:.3f}</b>'
+                                f'</div>',
+                                unsafe_allow_html=True
+                            )
+                        else:
+                            h_in = h_f / 2.54
+                            sn_i = ai * h_in * mi_f
+                            cum_sn += sn_i
+                            layer_results.append({
+                                'layer': li+1, 'material': mat_f,
+                                'h_cm': h_f, 'ai': ai, 'mi': mi_f,
+                                'sni': round(sn_i,3), 'cum_sn': round(cum_sn,3)
+                            })
+                            st.markdown(
+                                f'<div style="padding:0.35rem 0.5rem;font-size:0.82rem;'
+                                f'font-family:monospace;background:var(--color-background-secondary);'
+                                f'border-radius:6px;margin-top:0.25rem;">'
+                                f'<b>{h_f} cm</b> | ai={ai:.2f} | mi={mi_f:.1f} | '
+                                f'SNi={sn_i:.3f} | <b>ΣSNi={cum_sn:.3f}</b>'
+                                f'</div>',
+                                unsafe_allow_html=True
+                            )
+                    else:
+                        h_in = h_f / 2.54
+                        sn_i = ai * h_in * mi_f
+                        cum_sn += sn_i
+                        layer_results.append({
+                            'layer': li+1, 'material': mat_f,
+                            'h_cm': h_f, 'ai': ai, 'mi': mi_f,
+                            'sni': round(sn_i,3), 'cum_sn': round(cum_sn,3)
+                        })
+                        st.markdown(
+                            f'<div style="padding:0.35rem 0.5rem;font-size:0.82rem;'
+                            f'font-family:monospace;background:var(--color-background-secondary);'
+                            f'border-radius:6px;margin-top:0.25rem;">'
+                            f'<b>{h_f} cm</b> | ai={ai:.2f} | mi={mi_f:.1f} | '
+                            f'SNi={sn_i:.3f} | <b>ΣSNi={cum_sn:.3f}</b>'
+                            f'</div>',
+                            unsafe_allow_html=True
+                        )
+                else:
+                    st.markdown("")
 
-            if mat_f != "None" and h_f > 0:
-                ai, mi = FLEX_LAYER_MATERIALS[mat_f]
-                h_in   = h_f / 2.54
-                sn_i   = ai * h_in * mi
-                cum_sn += sn_i
-                layer_results.append({
-                    'layer': li+1, 'material': mat_f,
-                    'h_cm': h_f, 'ai': ai, 'mi': mi,
-                    'sni': round(sn_i,3), 'cum_sn': round(cum_sn,3)
-                })
-                _, d1,d2,d3,d4,d5 = st.columns([3, 1.5, 0.8, 0.8, 0.9, 1.1])
-                d1.markdown(f"`{h_f} cm`"); d2.markdown(f"`{ai:.2f}`")
-                d3.markdown(f"`{mi:.1f}`"); d4.markdown(f"`{sn_i:.3f}`")
-                d5.markdown(f"**`{cum_sn:.3f}`**")
-
-        st.markdown(f"""<div class="result-info">
+        st.markdown(f"""<div class="result-info" style="margin-top:0.5rem;">
             ΣSN Provided = <b>{cum_sn:.3f}</b>
         </div>""", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1711,7 +1820,7 @@ with tab4:
     with rp5:
         pi_rig = st.number_input("Pi", value=4.5, step=0.1, key="pi_rig")
     with rp6:
-        pt_rig2 = st.number_input("Pt", value=float(ss.pt_global), step=0.1,
+        pt_rig2 = st.number_input("Pt", value=float(ss.get("_pt_sync", ss.pt_global)), step=0.1,
                                    key="pt_rig2", help="Default จาก TAB 1 — แก้ได้")
 
     st.markdown(
@@ -1773,11 +1882,9 @@ with tab4:
                         label_visibility="collapsed"
                     )
                 with lc_c:
-                    # Auto-fill E_MPa: ติดตาม material ที่เลือก
-                    # ถ้า material เปลี่ยน → อัปเดต session state ทันที
                     prev_mat_key = f"_prev_mat_{tab_key}_{li}"
                     e_key        = f"re_{tab_key}_{li}"
-                    e_default    = RIGID_LAYER_E_DEFAULT.get(mat_r, 100) if mat_r != "None" else 0
+                    e_default    = RIGID_LAYER_E_DEFAULT.get(mat_r, 100) if mat_r != "ไม่เลือก" else 0
                     if ss.get(prev_mat_key) != mat_r:
                         ss[prev_mat_key] = mat_r
                         ss[e_key]        = e_default
@@ -1786,13 +1893,13 @@ with tab4:
                         step=50, min_value=0,
                         key=e_key,
                         label_visibility="collapsed",
-                        disabled=(mat_r == "None" or h_r == 0)
+                        disabled=(mat_r == "ไม่เลือก" or h_r == 0)
                     )
                 with lc_d:
-                    if mat_r != "None" and h_r > 0:
+                    if mat_r != "ไม่เลือก" and h_r > 0:
                         st.markdown("✅")
 
-                if mat_r != "None" and h_r > 0 and e_mpa > 0:
+                if mat_r != "ไม่เลือก" and h_r > 0 and e_mpa > 0:
                     layer_r.append({
                         "name": mat_r,
                         "thickness_cm": h_r,
