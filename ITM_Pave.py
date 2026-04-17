@@ -812,6 +812,8 @@ def ss_init():
         'ls_value':        1.0,
         'nomograph_img_k': None,
         'nomograph_img_ls':None,
+        'layer_esb_psi':   50000,
+        'layer_dsb_in':    6.0,
         # Rigid
         'rigid_results':   {},
     }
@@ -1493,14 +1495,14 @@ with tab4:
 
                 # ── auto-fill จาก session state ──
                 mr_auto_k  = int(ss.mr_subgrade_psi) if ss.mr_subgrade_psi else 7000
-                esb_auto_k = int(ss.get('nomo_esb', 50000))
-                dsb_auto_k = float(ss.get('nomo_dsb', 6.0))
+                esb_auto_k = int(ss.get('layer_esb_psi', 50000))
+                dsb_auto_k = float(ss.get('layer_dsb_in', 6.0))
 
                 if ss.mr_subgrade_psi:
                     st.markdown(f'<div class="badge-ready">📊 MR จาก Tab CBR = {mr_auto_k:,} psi</div>', unsafe_allow_html=True)
-                if ss.get('nomo_esb'):
+                if ss.get('layer_esb_psi'):
                     st.markdown(f'<div class="badge-ready">📐 ESB จาก Rigid Layers = {esb_auto_k:,} psi</div>', unsafe_allow_html=True)
-                if ss.get('nomo_dsb'):
+                if ss.get('layer_dsb_in'):
                     st.markdown(f'<div class="badge-ready">📏 DSB จาก Rigid Layers = {dsb_auto_k:.1f} in</div>', unsafe_allow_html=True)
 
                 mr_val  = st.number_input("MR (psi) — แก้ไขได้",     value=mr_auto_k,  step=500,  key="nomo_mr")
@@ -1592,14 +1594,14 @@ with tab4:
                     if ss.get('last_ls_select') != ls_sel:
                         ss['last_ls_select'] = ls_sel
                         coords = LS_PRESETS_LOCAL.get(ls_sel, (150,718,903,84))
-                        ss['_ls_x1'], ss['_ls_y1'] = coords[0], coords[1]
-                        ss['_ls_x2'], ss['_ls_y2'] = coords[2], coords[3]
+                        ss['_ls_px1'], ss['_ls_py1'] = coords[0], coords[1]
+                        ss['_ls_px2'], ss['_ls_py2'] = coords[2], coords[3]
 
                     with st.expander("ปรับแต่งเส้น LS ละเอียด", expanded=False):
-                        ls_x1 = st.slider("จุดเริ่ม X", -100, w2+100, ss.get('_ls_x1', 150), key="_ls_x1")
-                        ls_y1 = st.slider("จุดเริ่ม Y", -100, h2+100, ss.get('_ls_y1', 718), key="_ls_y1")
-                        ls_x2 = st.slider("จุดจบ X",   -100, w2+100, ss.get('_ls_x2', 903), key="_ls_x2")
-                        ls_y2 = st.slider("จุดจบ Y",   -100, h2+100, ss.get('_ls_y2',  84), key="_ls_y2")
+                        ls_x1 = st.slider("จุดเริ่ม X", -100, w2+100, ss.get('_ls_px1', 150), key="_ls_x1")
+                        ls_y1 = st.slider("จุดเริ่ม Y", -100, h2+100, ss.get('_ls_py1', 718), key="_ls_y1")
+                        ls_x2 = st.slider("จุดจบ X",   -100, w2+100, ss.get('_ls_px2', 903), key="_ls_x2")
+                        ls_y2 = st.slider("จุดจบ Y",   -100, h2+100, ss.get('_ls_py2',  84), key="_ls_y2")
 
                     draw2.line([(ls_x1,ls_y1),(ls_x2,ls_y2)], fill="red", width=6)
                     m_red = (ls_y2-ls_y1)/(ls_x2-ls_x1) if ls_x2-ls_x1 != 0 else None
@@ -1809,9 +1811,9 @@ with tab4:
                 e_eq_psi = e_eq_mpa * 145.038
                 dsb_in   = total_valid_cm / 2.54
 
-                # ── ส่งค่าไป session state → Tab K-Value ดึงได้ ──
-                ss['nomo_esb'] = int(e_eq_psi)
-                ss['nomo_dsb'] = round(dsb_in, 2)
+                # ── ส่งค่าไป session state → Section A K-Nomograph ดึงได้ ──
+                ss['layer_esb_psi'] = int(e_eq_psi)
+                ss['layer_dsb_in']  = round(dsb_in, 2)
 
                 st.markdown(f"""
                 <div class="result-info" style="margin-top:0.5rem;font-size:0.88rem;">
