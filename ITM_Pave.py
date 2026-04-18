@@ -642,9 +642,9 @@ def draw_pavement_structure(layers, mode="flex",
     d_concrete_cm : ความหนา Slab (rigid)
     ptype         : "JPCP" | "JRCP" | "CRCP"
     """
-    MIN_H   = 4      # ความสูงขั้นต่ำ (display units)
-    W       = 3    # ความกว้าง block
-    X_CTR   = 4    # กึ่งกลาง X
+    MIN_H   = 5      # ความสูงขั้นต่ำ (display units)
+    W       = 3.0    # ความกว้าง block
+    X_CTR   = 5.0    # กึ่งกลาง X
     X_START = X_CTR - W / 2
 
     # ── เตรียม layer list ──
@@ -699,8 +699,8 @@ def draw_pavement_structure(layers, mode="flex",
     # ── figsize: กว้างคงที่ สูงตาม layer count ──
     fig_h = max(4.0, min(n_layers * 1.4, 8.0))
     fig_w = 9.0
-    fs_lbl = max(7.5, 9.5 - n_layers * 0.3)   # fontsize ชื่อ
-    fs_h   = max(7.0, 9.0 - n_layers * 0.3)   # fontsize ความหนา
+    fs_lbl = max(10.0, 12.0 - n_layers * 0.3)   # fontsize ชื่อวัสดุ
+    fs_h   = max(10.0, 12.0 - n_layers * 0.3)   # fontsize ความหนา
 
     fig, ax = plt.subplots(figsize=(fig_w, fig_h))
     ax.set_xlim(0, 11)
