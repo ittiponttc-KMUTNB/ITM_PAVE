@@ -642,9 +642,9 @@ def draw_pavement_structure(layers, mode="flex",
     d_concrete_cm : ความหนา Slab (rigid)
     ptype         : "JPCP" | "JRCP" | "CRCP"
     """
-    MIN_H   = 5      # ความสูงขั้นต่ำ (display units)
-    W       = 3.0    # ความกว้าง block
-    X_CTR   = 5.0    # กึ่งกลาง X
+    MIN_H   = 4      # ความสูงขั้นต่ำ (display units)
+    W       = 2    # ความกว้าง block
+    X_CTR   = 4    # กึ่งกลาง X
     X_START = X_CTR - W / 2
 
     # ── เตรียม layer list ──
