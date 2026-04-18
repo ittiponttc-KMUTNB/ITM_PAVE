@@ -1788,10 +1788,10 @@ with tab4:
                     st.markdown('<div class="card"><h4>⚙️ ปรับเส้นอ่านค่า</h4>', unsafe_allow_html=True)
 
                     with st.expander("1. เส้น Turning Line (เขียว)", expanded=True):
-                        gx1 = st.slider("X เริ่ม", 0, w1, ss.get('gx1', int(w1*0.40)), key="gx1")
-                        gy1 = st.slider("Y เริ่ม", 0, h1, ss.get('gy1', int(h1*0.45)), key="gy1")
-                        gx2 = st.slider("X จบ",   0, w1, ss.get('gx2', int(w1*0.45)), key="gx2")
-                        gy2 = st.slider("Y จบ",   0, h1, ss.get('gy2', int(h1*0.52)), key="gy2")
+                        gx1 = st.slider("X เริ่ม", 0, w1, ss.get('gx1', 699), key="gx1")
+                        gy1 = st.slider("Y เริ่ม", 0, h1, ss.get('gy1', 625), key="gy1")
+                        gx2 = st.slider("X จบ",   0, w1, ss.get('gx2', 421), key="gx2")
+                        gy2 = st.slider("Y จบ",   0, h1, ss.get('gy2', 348), key="gy2")
                     draw1.line([(gx1,gy1),(gx2,gy2)], fill="green", width=5)
                     slope_g = (gy2-gy1)/(gx2-gx1) if (gx2-gx1) != 0 else 0
 
