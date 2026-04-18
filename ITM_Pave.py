@@ -365,7 +365,7 @@ def aashto_sn_required(esal, zr, so, pi, pt, mr_psi):
         return None
 
 def aashto_rigid_w18(d_cm, pi, pt, zr, so, sc_psi, cd, j, ec_psi, k_pci):
-    d_in = d_cm / 2.54
+    d_in = round(d_cm / 2.54)   # AASHTO 1993 ใช้ความหนาเป็นจำนวนเต็มนิ้ว
     delta_psi = pi - pt
     t1 = zr * so
     t2 = 7.35*math.log10(d_in+1) - 0.06
