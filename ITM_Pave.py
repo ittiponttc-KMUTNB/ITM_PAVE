@@ -771,15 +771,6 @@ def draw_pavement_structure(layers, mode="flex",
             ha='left', va='center',
             fontsize=9, color='#C0392B', fontweight='bold')
 
-    # ── กล่องสรุปล่าง ──
-    mode_label = "Flexible Pavement (AC)" if mode == "flex" \
-                 else f"Rigid Pavement ({ptype})"
-    ax.text(X_CTR, -2.5,
-            f"{mode_label}  —  Total = {total_thick} cm",
-            ha='center', va='center', fontsize=9, fontweight='bold',
-            bbox=dict(boxstyle='round,pad=0.4', facecolor='#FEF9E7',
-                      edgecolor='#F39C12', alpha=0.95))
-
     plt.tight_layout()
     return fig
 
