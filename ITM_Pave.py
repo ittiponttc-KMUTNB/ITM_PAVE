@@ -7,7 +7,7 @@
 # ║  TAB 2 │ CBR Analysis (Percentile)                             ║
 # ║  TAB 3 │ Flexible Pavement Design                              ║
 # ║  TAB 4 │ Rigid Design (K-Nomograph + JPCP/JRCP + CRCP)        ║
-# ║  TAB 5 │ Report & Save (Word + JSON)       ปรับปรุง ครั้งที่ 2 ║
+# ║  TAB 5 │ Report & Save (Word + JSON)       ปรับปรุง ครั้งที่ 2.1   ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 # ─────────────────────────────────────────────
@@ -66,6 +66,14 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 DOCX_OK = True
+
+try:
+    from PIL import Image as PILImage, ImageDraw as PILDraw
+    PIL_OK = True
+except ImportError:
+    PILImage = None
+    PILDraw  = None
+    PIL_OK   = False
 
 # ─────────────────────────────────────────────
 #  SEC 2: PAGE CONFIG
@@ -231,12 +239,12 @@ FLEX_LAYER_MATERIALS = {
     "ไม่เลือก":                                              (None, None),
     "ผิวทางลาดยาง PMA":                                      (0.44, 1.0),
     "ผิวทางแอสฟัลต์คอนกรีต (AC)":                           (0.40, 1.0),
-    "พื้นทางหินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc (CTB)": (0.18, 1.0),
-    "พื้นทางหินคลุกผสมซีเมนต์ UCS 24.5 ksc":               (0.15, 1.0),
-    "พื้นทางดินซีเมนต์ UCS 17.5 ksc":                       (0.13, 1.0),
-    "พื้นทางหินคลุก CBR 80%":                               (0.14, 1.0),
-    "พื้นทางวัสดุหมุนเวียน (Recycling)":                    (0.15, 1.0),
-    "รองพื้นทางวัสดุมวลรวม CBR 25%":                        (0.10, 1.0),
+    "(CTB) หินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc ": (0.18, 1.0),
+    "หินคลุกผสมซีเมนต์ UCS 24.5 ksc":               (0.15, 1.0),
+    "ดินซีเมนต์ UCS 17.5 ksc":                       (0.13, 1.0),
+    "หินคลุก CBR 80%":                               (0.13, 1.0),
+    "วัสดุหมุนเวียน (Recycling)":                    (0.15, 1.0),
+    "วัสดุมวลรวม CBR 25%":                        (0.10, 1.0),
     "วัสดุคัดเลือก ก":                                       (0.08, 1.0),
     "ดินถมคันทาง CBR 10%":                                   (0.08, 1.0),
 }
@@ -244,35 +252,29 @@ FLEX_LAYER_MATERIALS = {
 RIGID_LAYER_MATERIALS = {
     "ไม่เลือก":                                               None,
     "AC รองใต้ผิวคอนกรีต":                                   2500,
-    "พื้นทางวัสดุหมุนเวียน (Recycling)":                     850,
-    "พื้นทางหินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc (CTB)": 1200,
-    "พื้นทางหินคลุกผสมซีเมนต์ UCS 24.5 ksc":                850,
-    "พื้นทางดินซีเมนต์ UCS 17.5 ksc":                        350,
-    "พื้นทางหินคลุก CBR 80%":                                350,
+    "วัสดุหมุนเวียน (Recycling)":                     850,
+    "(CTB) หินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc ": 1200,
+    "หินคลุกผสมซีเมนต์ UCS 24.5 ksc":                850,
+    "ดินซีเมนต์ UCS 17.5 ksc":                        350,
+    "หินคลุก CBR 80%":                                350,
     "รองพื้นทางวัสดุมวลรวม CBR 25%":                         150,
     "วัสดุคัดเลือก ก":                                        100,
     "ดินถมคันทาง CBR 10%":                                    100,
 }
 
 # E_MPa default ต่อวัสดุ (สำหรับ auto-fill Layer Editor)
+# NOTE: key ต้องตรงกับ RIGID_LAYER_MATERIALS ทุกตัว
 RIGID_LAYER_E_DEFAULT = {
     "ไม่เลือก":                                               0,
     "AC รองใต้ผิวคอนกรีต":                                   2500,
-    "พื้นทางวัสดุหมุนเวียน (Recycling)":                     850,
-    "พื้นทางหินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc (CTB)": 1200,
-    "พื้นทางหินคลุกผสมซีเมนต์ UCS 24.5 ksc":                850,
-    "พื้นทางดินซีเมนต์ UCS 17.5 ksc":                        350,
-    "พื้นทางหินคลุก CBR 80%":                                350,
+    "วัสดุหมุนเวียน (Recycling)":                             850,
+    "(CTB) หินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc ":      1200,
+    "หินคลุกผสมซีเมนต์ UCS 24.5 ksc":                        850,
+    "ดินซีเมนต์ UCS 17.5 ksc":                                350,
+    "หินคลุก CBR 80%":                                        350,
     "รองพื้นทางวัสดุมวลรวม CBR 25%":                         150,
     "วัสดุคัดเลือก ก":                                        100,
     "ดินถมคันทาง CBR 10%":                                    100,
-}
-
-# มาตรฐานกรมทางหลวง — ความหนาแต่ละชั้นย่อย AC (cm)
-DOH_AC_LIMITS = {
-    'wear': {'min': 4, 'max': 7,  'label': 'Wearing Course'},
-    'bind': {'min': 4, 'max': 8,  'label': 'Binder Course'},
-    'base': {'min': 7, 'max': 10, 'label': 'Base Course'},
 }
 
 SAMPLE_CBR = [14.8,14.37,5.31,17.37,5.48,18.46,4.85,6.23,
@@ -822,6 +824,7 @@ def ss_init():
         'pt_global':       2.5,
         'pt_rigid':        2.5,
         'pt_flex':         2.5,
+        '_pt_sync':        2.5,
         'sn_list':         [6.5, 7.1, 7.5, 8.0],
         # CBR
         'cbr_values':      [],
@@ -939,7 +942,7 @@ with st.sidebar:
     รศ.ดร.อิทธิพล มีผล<br>
     ภาควิชาครุศาสตร์โยธา<br>
     คณะครุศาสตร์อุตสาหกรรม มจพ.<br>
-    ITM Pave Pro v1.0
+    ITM Pave Pro v2.1
     </div>
     """, unsafe_allow_html=True)
 
@@ -982,12 +985,8 @@ with tab1:
             help="ค่านี้จะเป็น default ใน TAB Flexible และ TAB Rigid — แก้ได้อิสระในแต่ละ TAB"
         )
         if pt_global != ss.pt_global:
-            ss.pt_global   = pt_global
+            ss.pt_global  = pt_global
             ss['_pt_sync'] = pt_global
-            # ลบ widget keys ออกเพื่อบังคับให้ Streamlit อ่าน value= ใหม่
-            for _k in ['pt_fl2', 'pt_rig2']:
-                if _k in ss:
-                    del ss[_k]
             st.rerun()
     with pt_g_col2:
         st.markdown(f"""
@@ -1414,23 +1413,14 @@ with tab3:
                         if do_sub:
                             sc1, sc2, sc3 = st.columns(3)
                             with sc1:
-                                h_wear = st.number_input(
-                                    "Wearing (cm)", value=5, step=1, min_value=0,
-                                    key=f"fwear_{li}",
-                                    help=f"กรมทางหลวง: {DOH_AC_LIMITS['wear']['min']}–{DOH_AC_LIMITS['wear']['max']} cm"
-                                )
+                                h_wear = st.number_input("Wearing (cm)", value=5, step=1,
+                                                         min_value=0, key=f"fwear_{li}")
                             with sc2:
-                                h_bind = st.number_input(
-                                    "Binder (cm)", value=7, step=1, min_value=0,
-                                    key=f"fbind_{li}",
-                                    help=f"กรมทางหลวง: {DOH_AC_LIMITS['bind']['min']}–{DOH_AC_LIMITS['bind']['max']} cm"
-                                )
+                                h_bind = st.number_input("Binder (cm)", value=7, step=1,
+                                                         min_value=0, key=f"fbind_{li}")
                             with sc3:
-                                h_base = st.number_input(
-                                    "Base (cm)", value=10, step=1, min_value=0,
-                                    key=f"fbase_{li}",
-                                    help=f"กรมทางหลวง: {DOH_AC_LIMITS['base']['min']}–{DOH_AC_LIMITS['base']['max']} cm"
-                                )
+                                h_base = st.number_input("Base (cm)", value=10, step=1,
+                                                         min_value=0, key=f"fbase_{li}")
                             h_total = h_wear + h_bind + h_base
                             h_in_total = h_total / 2.54
                             sn_i = ai * h_in_total * mi_f
@@ -1441,26 +1431,12 @@ with tab3:
                                 'sni': round(sn_i,3), 'cum_sn': round(cum_sn,3),
                                 'sub': {'wear': h_wear, 'bind': h_bind, 'base': h_base}
                             })
-                            # ── แจ้งเตือนความหนาแต่ละชั้น ──
-                            def _thick_badge(h, key):
-                                lim = DOH_AC_LIMITS[key]
-                                mn, mx, lbl = lim['min'], lim['max'], lim['label']
-                                if h < mn:
-                                    return f'<span style="color:#B71C1C;">❌ {lbl} {h}cm (ต่ำกว่า {mn}cm)</span>'
-                                elif h > mx:
-                                    return f'<span style="color:#E65100;">⚠️ {lbl} {h}cm (เกิน {mx}cm)</span>'
-                                else:
-                                    return f'<span style="color:#1B5E20;">✅ {lbl} {h}cm ({mn}–{mx})</span>'
-                            badge_w = _thick_badge(h_wear, 'wear')
-                            badge_b = _thick_badge(h_bind, 'bind')
-                            badge_s = _thick_badge(h_base, 'base')
                             st.markdown(
                                 f'<div style="padding:0.35rem 0.5rem;font-size:0.80rem;'
                                 f'font-family:monospace;background:var(--color-background-secondary);'
                                 f'border-radius:6px;margin-top:0.2rem;">'
                                 f'Wearing={h_wear}+Binder={h_bind}+Base={h_base} = <b>{h_total} cm</b>'
-                                f' | ai={ai:.2f} | SNi={sn_i:.3f} | <b>ΣSNi={cum_sn:.3f}</b><br>'
-                                f'{badge_w} &nbsp; {badge_b} &nbsp; {badge_s}'
+                                f' | ai={ai:.2f} | SNi={sn_i:.3f} | <b>ΣSNi={cum_sn:.3f}</b>'
                                 f'</div>',
                                 unsafe_allow_html=True
                             )
@@ -1519,13 +1495,12 @@ with tab3:
                     css    = "result-pass" if passed else "result-fail"
                     chk    = "✅ PASS" if passed else "❌ FAIL"
 
-                    sn_ratio = cum_sn / sn_req if sn_req > 0 else 0
-                    ratio_color = '#1B5E20' if sn_ratio >= 1.0 else '#B71C1C'
-                    ratio_label = 'SN Ratio (≥1.0 = ผ่าน)'
-                    c1,c2,c3 = st.columns(3)
+                    sn_ratio = cum_sn / sn_req if sn_req > 0 else 0.0
+                    c1,c2,c3,c4 = st.columns(4)
                     with c1: st.markdown(f"""<div class="metric-box"><div class="val">{cum_sn:.3f}</div><div class="lbl">SN Provided</div></div>""", unsafe_allow_html=True)
                     with c2: st.markdown(f"""<div class="metric-box"><div class="val">{sn_req:.3f}</div><div class="lbl">SN Required</div></div>""", unsafe_allow_html=True)
-                    with c3: st.markdown(f"""<div class="metric-box"><div class="val" style="color:{ratio_color}">{sn_ratio:.3f}</div><div class="lbl">{ratio_label}</div></div>""", unsafe_allow_html=True)
+                    with c3: st.markdown(f"""<div class="metric-box"><div class="val" style="color:{'#1B5E20' if passed else '#B71C1C'}">{margin:+.3f}</div><div class="lbl">Safety Margin</div></div>""", unsafe_allow_html=True)
+                    with c4: st.markdown(f"""<div class="metric-box"><div class="val" style="color:{'#1B5E20' if sn_ratio>=1.0 else '#B71C1C'}">{sn_ratio:.3f}</div><div class="lbl">SN Ratio (≥1.0 = ผ่าน)</div></div>""", unsafe_allow_html=True)
 
                     st.markdown(f'<div class="{css}" style="margin-top:0.8rem;font-size:1.05rem">{chk} — SN Required = {sn_req:.3f} | SN Provided = {cum_sn:.3f}</div>', unsafe_allow_html=True)
 
@@ -1578,8 +1553,8 @@ with tab4:
 
         # ─── Sub-tab A: Composite k∞ ───
         with sub_kinf:
-            from PIL import Image as PILImage, ImageDraw as PILDraw
-
+            if not PIL_OK:
+                st.error("⚠️ ไม่พบ Pillow — ติดตั้งด้วย `pip install Pillow`")
             uploaded_k = st.file_uploader(
                 "📂 Upload ภาพ Figure 3.3 (Composite k∞)",
                 type=['png','jpg','jpeg'], key='uploader_kinf'
@@ -2078,7 +2053,8 @@ with tab4:
                         css    = "result-pass" if passed else "result-fail"
                         chk    = "✅ PASS" if passed else "❌ FAIL"
 
-                        c1, c2, c3 = st.columns(3)
+                        w18_ratio = w18_cap / w18_req if w18_req > 0 else 0.0
+                        c1, c2, c3, c4 = st.columns(4)
                         with c1:
                             st.markdown(f"""<div class="metric-box">
                                 <div class="val">{w18_cap:,.0f}</div>
@@ -2094,6 +2070,12 @@ with tab4:
                             st.markdown(f"""<div class="metric-box">
                                 <div class="val" style="color:{color}">{margin:+.1f}%</div>
                                 <div class="lbl">Safety Margin</div>
+                            </div>""", unsafe_allow_html=True)
+                        with c4:
+                            ratio_color = '#1B5E20' if w18_ratio >= 1.0 else '#B71C1C'
+                            st.markdown(f"""<div class="metric-box">
+                                <div class="val" style="color:{ratio_color}">{w18_ratio:.3f}</div>
+                                <div class="lbl">W18 Ratio (≥1.0 = ผ่าน)</div>
                             </div>""", unsafe_allow_html=True)
 
                         st.markdown(f"""
@@ -2257,7 +2239,7 @@ with tab5:
     st.divider()
     st.markdown("""
     <div style='text-align:center;color:#558B2F;font-size:0.85rem;padding:0.5rem;'>
-        🛣️ <b>ITM Pave Pro v1.0</b> — AASHTO 1993 Pavement Design System<br>
+        🛣️ <b>ITM Pave Pro v2.1</b> — AASHTO 1993 Pavement Design System<br>
         พัฒนาโดย รศ.ดร.อิทธิพล มีผล | ภาควิชาครุศาสตร์โยธา | คณะครุศาสตร์อุตสาหกรรม | มจพ.
     </div>
     """, unsafe_allow_html=True)
