@@ -583,29 +583,43 @@ def fig_to_bytes(fig):
 #  SEC 6b: PAVEMENT STRUCTURE FIGURE
 # ─────────────────────────────────────────────
 
-# สีแต่ละวัสดุ — ครอบคลุมทั้ง Flexible และ Rigid
-_LAYER_COLORS = {
-    # Flexible surface
-    "ผิวทางลาดยาง PMA":                                     "#1A252F",
-    "ผิวทางแอสฟัลต์คอนกรีต (AC)":                          "#2C3E50",
-    # Rigid surface
-    "Concrete Slab":                                         "#78909C",
-    # Base / Subbase
-    "(CTB) หินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc ":    "#7F8C8D",
-    "หินคลุกผสมซีเมนต์ UCS 24.5 ksc":                      "#95A5A6",
-    "ดินซีเมนต์ UCS 17.5 ksc":                              "#AAB7B8",
-    "หินคลุก CBR 80%":                                      "#BDC3C7",
-    "วัสดุหมุนเวียน (Recycling)":                           "#85929E",
-    "วัสดุมวลรวม CBR 25%":                                  "#FFCC99",
-    "รองพื้นทางวัสดุมวลรวม CBR 25%":                       "#FFCC99",
-    "วัสดุคัดเลือก ก":                                      "#E8DAEF",
-    "AC รองใต้ผิวคอนกรีต":                                  "#34495E",
-    # Subgrade
-    "ดินถมคันทาง CBR 10%":                                  "#F5CBA7",
-    "ดินถมคันทาง / ดินเดิม":                                "#F5CBA7",
+# แปลงชื่อวัสดุภาษาไทย → อังกฤษสำหรับแสดงในรูป
+_LAYER_NAME_EN = {
+    "ผิวทางลาดยาง PMA":                                    "PMA Surface",
+    "ผิวทางแอสฟัลต์คอนกรีต (AC)":                         "AC Surface",
+    "(CTB) หินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc ":   "Cement Treated Base",
+    "หินคลุกผสมซีเมนต์ UCS 24.5 ksc":                     "MOD. Crushed Rock",
+    "ดินซีเมนต์ UCS 17.5 ksc":                             "Soil Cement",
+    "หินคลุก CBR 80%":                                     "Crushed Rock (CBR 80%)",
+    "วัสดุหมุนเวียน (Recycling)":                          "Recycled Material",
+    "วัสดุมวลรวม CBR 25%":                                 "Aggregate Subbase",
+    "รองพื้นทางวัสดุมวลรวม CBR 25%":                      "Aggregate Subbase",
+    "วัสดุคัดเลือก ก":                                     "Selected A",
+    "AC รองใต้ผิวคอนกรีต":                                 "AC Interlayer",
+    "ดินถมคันทาง CBR 10%":                                 "Embankment",
+    "ดินถมคันทาง / ดินเดิม":                               "Embankment",
+    "Concrete Slab":                                        "Concrete Slab",
 }
 
-# วัสดุที่ใช้ text สีขาว (배경เข้ม)
+# สีแต่ละวัสดุ
+_LAYER_COLORS = {
+    "ผิวทางลาดยาง PMA":                                    "#1A252F",
+    "ผิวทางแอสฟัลต์คอนกรีต (AC)":                         "#2C3E50",
+    "Concrete Slab":                                        "#78909C",
+    "(CTB) หินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc ":   "#7F8C8D",
+    "หินคลุกผสมซีเมนต์ UCS 24.5 ksc":                     "#95A5A6",
+    "ดินซีเมนต์ UCS 17.5 ksc":                             "#AAB7B8",
+    "หินคลุก CBR 80%":                                     "#BDC3C7",
+    "วัสดุหมุนเวียน (Recycling)":                          "#85929E",
+    "วัสดุมวลรวม CBR 25%":                                 "#FFCC99",
+    "รองพื้นทางวัสดุมวลรวม CBR 25%":                      "#FFCC99",
+    "วัสดุคัดเลือก ก":                                     "#E8DAEF",
+    "AC รองใต้ผิวคอนกรีต":                                 "#34495E",
+    "ดินถมคันทาง CBR 10%":                                 "#F5CBA7",
+    "ดินถมคันทาง / ดินเดิม":                               "#F5CBA7",
+}
+
+# วัสดุที่ใช้ text สีขาว (background เข้ม)
 _DARK_LAYERS = {
     "ผิวทางลาดยาง PMA", "ผิวทางแอสฟัลต์คอนกรีต (AC)",
     "Concrete Slab", "AC รองใต้ผิวคอนกรีต",
@@ -618,67 +632,79 @@ def draw_pavement_structure(layers, mode="flex",
                              d_concrete_cm=None,
                              ptype="JPCP"):
     """
-    วาดรูปโครงสร้างชั้นทาง (matplotlib)
+    วาดรูปโครงสร้างชั้นทาง (matplotlib) — ชื่อวัสดุภาษาอังกฤษ
 
     Parameters
     ----------
-    layers        : list of dict — {name, thickness_cm, ai(flex)/E_MPa(rigid), ...}
+    layers        : list of dict
     mode          : "flex" | "rigid"
     cbr_subgrade  : CBR ดินเดิม (%)
-    d_concrete_cm : ความหนา Slab คอนกรีต (rigid เท่านั้น)
+    d_concrete_cm : ความหนา Slab (rigid)
     ptype         : "JPCP" | "JRCP" | "CRCP"
     """
-    MIN_H   = 8      # ความสูงขั้นต่ำสำหรับแสดงผล (หน่วย display)
-    W       = 3.2    # ความกว้าง block
-    X_CTR   = 5.5    # กึ่งกลาง X
+    MIN_H   = 5      # ความสูงขั้นต่ำ (display units)
+    W       = 3.0    # ความกว้าง block
+    X_CTR   = 5.0    # กึ่งกลาง X
     X_START = X_CTR - W / 2
 
     # ── เตรียม layer list ──
     all_layers = []
     if mode == "rigid" and d_concrete_cm:
         all_layers.append({
-            "name": "Concrete Slab",
+            "name":        "Concrete Slab",
             "thickness_cm": d_concrete_cm,
-            "label": f"Concrete Slab\n({ptype})",
-            "side_info": None,
+            "label":       f"Concrete Slab ({ptype})",
+            "side_info":   None,
         })
 
     valid = [l for l in layers if l.get("thickness_cm", 0) > 0]
     for l in valid:
         name  = l.get("name", "")
         h     = l.get("thickness_cm", 0)
+        en    = _LAYER_NAME_EN.get(name, name)
         if mode == "flex":
-            ai    = l.get("ai", None)
-            sni   = l.get("sni", None)
-            side  = f"ai={ai:.2f}  SNi={sni:.3f}" if ai and sni else None
+            ai  = l.get("ai",  None)
+            sni = l.get("sni", None)
+            side = f"ai={ai:.2f} | SNi={sni:.3f}" if ai and sni else None
         else:
             e_mpa = l.get("E_MPa", None)
-            side  = f"E = {e_mpa:,} MPa" if e_mpa else None
+            side  = f"E={e_mpa:,} MPa" if e_mpa else None
         all_layers.append({"name": name, "thickness_cm": h,
-                            "label": name, "side_info": side})
+                            "label": en, "side_info": side})
 
-    # Subgrade row
+    # Subgrade
     all_layers.append({
-        "name": "ดินถมคันทาง / ดินเดิม",
-        "thickness_cm": 0,   # แสดงเป็น ∞
-        "label": f"Subgrade\nCBR ≥ {cbr_subgrade:.0f}%",
-        "side_info": None,
+        "name":        "ดินถมคันทาง / ดินเดิม",
+        "thickness_cm": 0,
+        "label":       f"Subgrade (CBR≥{cbr_subgrade:.0f}%)",
+        "side_info":   None,
     })
 
     if len(all_layers) <= 1:
         return None
 
-    # ── คำนวณ display height ──
+    # ── display height — normalize ──
+    n_layers  = len(all_layers)
+    real_h    = [l["thickness_cm"] for l in all_layers]
+    max_real  = max((h for h in real_h if h > 0), default=30)
+    # scale ให้ layer ใหญ่สุด = 40 display units, ขั้นต่ำ MIN_H
+    SCALE     = 40.0 / max_real
     display_h = []
-    for l in all_layers:
-        h = l["thickness_cm"]
-        display_h.append(MIN_H if h == 0 else max(h, MIN_H))
-    total_disp  = sum(display_h)
-    total_thick = sum(l["thickness_cm"] for l in all_layers if l["thickness_cm"] > 0)
+    for h in real_h:
+        display_h.append(MIN_H if h == 0 else max(round(h * SCALE, 1), MIN_H))
 
-    fig, ax = plt.subplots(figsize=(11, max(6, total_disp * 0.35)))
-    ax.set_xlim(0, 13)
-    ax.set_ylim(-6, total_disp + 8)
+    total_disp  = sum(display_h)
+    total_thick = sum(h for h in real_h if h > 0)
+
+    # ── figsize: กว้างคงที่ สูงตาม layer count ──
+    fig_h = max(4.0, min(n_layers * 1.4, 8.0))
+    fig_w = 9.0
+    fs_lbl = max(7.5, 9.5 - n_layers * 0.3)   # fontsize ชื่อ
+    fs_h   = max(7.0, 9.0 - n_layers * 0.3)   # fontsize ความหนา
+
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+    ax.set_xlim(0, 11)
+    ax.set_ylim(-4, total_disp + 5)
     ax.axis('off')
     fig.patch.set_facecolor('white')
 
@@ -699,10 +725,10 @@ def draw_pavement_structure(layers, mode="flex",
         y_bot = y - dh
         y_ctr = y_bot + dh / 2
 
-        # วาด rectangle
+        # rectangle
         rect = patches.Rectangle(
             (X_START, y_bot), W, dh,
-            linewidth=1.8, edgecolor='#2C3E50',
+            linewidth=1.5, edgecolor='#2C3E50',
             facecolor=color, hatch=hatch, zorder=2
         )
         ax.add_patch(rect)
@@ -711,45 +737,47 @@ def draw_pavement_structure(layers, mode="flex",
         h_text = f"{h_cm} cm" if h_cm > 0 else "∞"
         ax.text(X_CTR, y_ctr, h_text,
                 ha='center', va='center',
-                fontsize=13, fontweight='bold', color=txt_col, zorder=3)
+                fontsize=fs_h, fontweight='bold',
+                color=txt_col, zorder=3)
 
-        # ชื่อวัสดุทางซ้าย
-        ax.text(X_START - 0.3, y_ctr, label,
+        # ชื่อวัสดุซ้าย
+        ax.text(X_START - 0.2, y_ctr, label,
                 ha='right', va='center',
-                fontsize=10.5, fontweight='bold', color='#1B2631',
-                wrap=True, zorder=3)
+                fontsize=fs_lbl, fontweight='bold',
+                color='#1B2631', zorder=3)
 
-        # ข้อมูลทางขวา (ai/SNi หรือ E_MPa)
+        # ข้อมูลขวา
         if side:
-            ax.text(X_START + W + 0.3, y_ctr, side,
+            ax.text(X_START + W + 0.2, y_ctr, side,
                     ha='left', va='center',
-                    fontsize=9.5, color='#154360', zorder=3)
+                    fontsize=max(fs_lbl - 1, 7.0),
+                    color='#154360', zorder=3)
 
-        # เส้นคั่นบน (ยกเว้น layer แรก)
+        # เส้นคั่น
         if i > 0:
             ax.plot([X_START, X_START + W], [y, y],
-                    color='#2C3E50', lw=1.2, zorder=3)
+                    color='#2C3E50', lw=1.0, zorder=3)
 
         y = y_bot
 
-    # ── ลูกศร Total thickness ──
-    x_arr = X_START + W + 3.2
-    y_top_arr = display_h[0] if mode == "rigid" and d_concrete_cm else total_disp
-    # ลูกศรครอบทุก layer ยกเว้น subgrade
-    y_solid_total = sum(display_h[:-1])
-    ax.annotate('', xy=(x_arr, total_disp), xytext=(x_arr, total_disp - y_solid_total),
-                arrowprops=dict(arrowstyle='<->', color='#C0392B', lw=2.0))
-    ax.text(x_arr + 0.25, total_disp - y_solid_total / 2,
+    # ── ลูกศร Total ──
+    x_arr       = X_START + W + 2.8
+    y_solid     = sum(display_h[:-1])   # ไม่รวม subgrade
+    ax.annotate('', xy=(x_arr, total_disp),
+                xytext=(x_arr, total_disp - y_solid),
+                arrowprops=dict(arrowstyle='<->', color='#C0392B', lw=1.8))
+    ax.text(x_arr + 0.2, total_disp - y_solid / 2,
             f"Total\n{total_thick} cm",
             ha='left', va='center',
-            fontsize=11, color='#C0392B', fontweight='bold')
+            fontsize=9, color='#C0392B', fontweight='bold')
 
     # ── กล่องสรุปล่าง ──
-    mode_label = "Flexible (AC)" if mode == "flex" else f"Rigid Concrete ({ptype})"
-    ax.text(X_CTR, -4,
-            f"Pavement Structure — {mode_label}   |   Total = {total_thick} cm",
-            ha='center', va='center', fontsize=11, fontweight='bold',
-            bbox=dict(boxstyle='round,pad=0.5', facecolor='#FEF9E7',
+    mode_label = "Flexible Pavement (AC)" if mode == "flex" \
+                 else f"Rigid Pavement ({ptype})"
+    ax.text(X_CTR, -2.5,
+            f"{mode_label}  —  Total = {total_thick} cm",
+            ha='center', va='center', fontsize=9, fontweight='bold',
+            bbox=dict(boxstyle='round,pad=0.4', facecolor='#FEF9E7',
                       edgecolor='#F39C12', alpha=0.95))
 
     plt.tight_layout()
