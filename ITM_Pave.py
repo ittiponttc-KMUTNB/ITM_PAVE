@@ -1795,60 +1795,60 @@ with tab4:
                     draw1.line([(gx1,gy1),(gx2,gy2)], fill="green", width=5)
                     slope_g = (gy2-gy1)/(gx2-gx1) if (gx2-gx1) != 0 else 0
 
-                with st.expander("2. พารามิเตอร์ (ส้ม/แดง/น้ำเงิน)", expanded=True):
-                    start_x   = st.slider("ตำแหน่งแกน D_SB (ซ้าย)", 0, w1, ss.get('s1_sx',   int(w1*0.15)), key="s1_sx")
-                    stop_y_esb= st.slider("ระดับค่า ESB (บน)",       0, h1, ss.get('s1_sy_esb',int(h1*0.10)), key="s1_sy_esb")
-                    stop_y_mr = st.slider("ระดับค่า MR (ล่าง)",      0, h1, ss.get('s1_sy_mr', int(h1*0.55)), key="s1_sy_mr")
-                    constrained_x = int(gx1 + (stop_y_mr - gy1) / slope_g) if slope_g != 0 else gx1
+                    with st.expander("2. พารามิเตอร์ (ส้ม/แดง/น้ำเงิน)", expanded=True):
+                        start_x   = st.slider("ตำแหน่งแกน D_SB (ซ้าย)", 0, w1, ss.get('s1_sx',   int(w1*0.15)), key="s1_sx")
+                        stop_y_esb= st.slider("ระดับค่า ESB (บน)",       0, h1, ss.get('s1_sy_esb',int(h1*0.10)), key="s1_sy_esb")
+                        stop_y_mr = st.slider("ระดับค่า MR (ล่าง)",      0, h1, ss.get('s1_sy_mr', int(h1*0.55)), key="s1_sy_mr")
+                        constrained_x = int(gx1 + (stop_y_mr - gy1) / slope_g) if slope_g != 0 else gx1
 
-                # วาดลูกศร
-                def _arrow(drw, start, end, color, lw=4, arrow=14):
-                    drw.line([start, end], fill=color, width=lw)
-                    dx = end[0]-start[0]; dy = end[1]-start[1]
-                    L = math.sqrt(dx*dx+dy*dy)
-                    if L > 0:
-                        dx/=L; dy/=L; px=-dy; py=dx
-                        bx=end[0]-arrow*dx; by=end[1]-arrow*dy
-                        drw.polygon([(end[0],end[1]),(int(bx+arrow*0.5*px),int(by+arrow*0.5*py)),
-                                     (int(bx-arrow*0.5*px),int(by-arrow*0.5*py))], fill=color)
+                    # วาดลูกศร
+                    def _arrow(drw, start, end, color, lw=4, arrow=14):
+                        drw.line([start, end], fill=color, width=lw)
+                        dx = end[0]-start[0]; dy = end[1]-start[1]
+                        L = math.sqrt(dx*dx+dy*dy)
+                        if L > 0:
+                            dx/=L; dy/=L; px=-dy; py=dx
+                            bx=end[0]-arrow*dx; by=end[1]-arrow*dy
+                            drw.polygon([(end[0],end[1]),(int(bx+arrow*0.5*px),int(by+arrow*0.5*py)),
+                                         (int(bx-arrow*0.5*px),int(by-arrow*0.5*py))], fill=color)
 
-                _arrow(draw1, (start_x, stop_y_esb), (constrained_x, stop_y_esb), "orange")
-                _arrow(draw1, (start_x, stop_y_esb), (start_x, stop_y_mr),         "red")
-                _arrow(draw1, (start_x, stop_y_mr),  (constrained_x, stop_y_mr),   "darkblue")
-                _arrow(draw1, (constrained_x, stop_y_mr), (constrained_x, stop_y_esb), "blue")
-                r=8
-                draw1.ellipse([(constrained_x-r,stop_y_mr-r),(constrained_x+r,stop_y_mr+r)],
-                               fill="black", outline="white")
+                    _arrow(draw1, (start_x, stop_y_esb), (constrained_x, stop_y_esb), "orange")
+                    _arrow(draw1, (start_x, stop_y_esb), (start_x, stop_y_mr),         "red")
+                    _arrow(draw1, (start_x, stop_y_mr),  (constrained_x, stop_y_mr),   "darkblue")
+                    _arrow(draw1, (constrained_x, stop_y_mr), (constrained_x, stop_y_esb), "blue")
+                    r=8
+                    draw1.ellipse([(constrained_x-r,stop_y_mr-r),(constrained_x+r,stop_y_mr+r)],
+                                   fill="black", outline="white")
 
-                st.markdown('</div>', unsafe_allow_html=True)
-                st.markdown('<div class="card"><h4>📝 บันทึกค่าที่อ่านได้</h4>', unsafe_allow_html=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="card"><h4>📝 บันทึกค่าที่อ่านได้</h4>', unsafe_allow_html=True)
 
-                # ── auto-fill จาก session state ──
-                mr_auto_k  = int(ss.mr_subgrade_psi) if ss.mr_subgrade_psi else 7000
-                esb_auto_k = int(ss.get('layer_esb_psi', 50000))
-                dsb_auto_k = float(ss.get('layer_dsb_in', 6.0))
+                    # ── auto-fill จาก session state ──
+                    mr_auto_k  = int(ss.mr_subgrade_psi) if ss.mr_subgrade_psi else 7000
+                    esb_auto_k = int(ss.get('layer_esb_psi', 50000))
+                    dsb_auto_k = float(ss.get('layer_dsb_in', 6.0))
 
-                if ss.mr_subgrade_psi:
-                    st.markdown(f'<div class="badge-ready">📊 MR จาก Tab CBR = {mr_auto_k:,} psi</div>', unsafe_allow_html=True)
-                if ss.get('layer_esb_psi'):
-                    st.markdown(f'<div class="badge-ready">📐 ESB จาก Rigid Layers = {esb_auto_k:,} psi</div>', unsafe_allow_html=True)
-                if ss.get('layer_dsb_in'):
-                    st.markdown(f'<div class="badge-ready">📏 DSB จาก Rigid Layers = {dsb_auto_k:.1f} in</div>', unsafe_allow_html=True)
+                    if ss.mr_subgrade_psi:
+                        st.markdown(f'<div class="badge-ready">📊 MR จาก Tab CBR = {mr_auto_k:,} psi</div>', unsafe_allow_html=True)
+                    if ss.get('layer_esb_psi'):
+                        st.markdown(f'<div class="badge-ready">📐 ESB จาก Rigid Layers = {esb_auto_k:,} psi</div>', unsafe_allow_html=True)
+                    if ss.get('layer_dsb_in'):
+                        st.markdown(f'<div class="badge-ready">📏 DSB จาก Rigid Layers = {dsb_auto_k:.1f} in</div>', unsafe_allow_html=True)
 
-                mr_val  = st.number_input("MR (psi) — แก้ไขได้",     value=mr_auto_k,  step=500,  key="nomo_mr")
-                esb_val = st.number_input("ESB (psi) — แก้ไขได้",    value=esb_auto_k, step=1000, key="nomo_esb")
-                dsb_val = st.number_input("DSB (inches) — แก้ไขได้", value=dsb_auto_k, step=0.5,  key="nomo_dsb")
-                k_inf_read = st.number_input("k∞ ที่อ่านได้ (pci)",  value=int(ss.get('nomo_k_inf', 400)), step=10, key="nomo_k_inf")
+                    mr_val  = st.number_input("MR (psi) — แก้ไขได้",     value=mr_auto_k,  step=500,  key="nomo_mr")
+                    esb_val = st.number_input("ESB (psi) — แก้ไขได้",    value=esb_auto_k, step=1000, key="nomo_esb")
+                    dsb_val = st.number_input("DSB (inches) — แก้ไขได้", value=dsb_auto_k, step=0.5,  key="nomo_dsb")
+                    k_inf_read = st.number_input("k∞ ที่อ่านได้ (pci)",  value=int(ss.get('nomo_k_inf', 400)), step=10, key="nomo_k_inf")
 
-                if st.button("✅ บันทึก k∞", type="primary", key="save_kinf"):
-                    ss.k_inf = float(k_inf_read)
-                    buf1 = io.BytesIO()
-                    img1_draw.save(buf1, format='PNG')
-                    ss['nomograph_img_k'] = buf1.getvalue()
-                    ss['img1_original']   = raw_k
-                    st.markdown(f'<div class="result-pass">k∞ = <b>{k_inf_read} pci</b> บันทึกแล้ว → ใช้ใน Tab Loss of Support และ Rigid Design</div>', unsafe_allow_html=True)
+                    if st.button("✅ บันทึก k∞", type="primary", key="save_kinf"):
+                        ss.k_inf = float(k_inf_read)
+                        buf1 = io.BytesIO()
+                        img1_draw.save(buf1, format='PNG')
+                        ss['nomograph_img_k'] = buf1.getvalue()
+                        ss['img1_original']   = raw_k
+                        st.markdown(f'<div class="result-pass">k∞ = <b>{k_inf_read} pci</b> บันทึกแล้ว → ใช้ใน Tab Loss of Support และ Rigid Design</div>', unsafe_allow_html=True)
 
-                st.markdown('</div>', unsafe_allow_html=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
 
                 with col_img1:
                     if ss.get('k_inf'):
