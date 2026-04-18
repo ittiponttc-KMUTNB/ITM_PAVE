@@ -580,6 +580,183 @@ def fig_to_bytes(fig):
     return buf.read()
 
 # ─────────────────────────────────────────────
+#  SEC 6b: PAVEMENT STRUCTURE FIGURE
+# ─────────────────────────────────────────────
+
+# สีแต่ละวัสดุ — ครอบคลุมทั้ง Flexible และ Rigid
+_LAYER_COLORS = {
+    # Flexible surface
+    "ผิวทางลาดยาง PMA":                                     "#1A252F",
+    "ผิวทางแอสฟัลต์คอนกรีต (AC)":                          "#2C3E50",
+    # Rigid surface
+    "Concrete Slab":                                         "#78909C",
+    # Base / Subbase
+    "(CTB) หินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc ":    "#7F8C8D",
+    "หินคลุกผสมซีเมนต์ UCS 24.5 ksc":                      "#95A5A6",
+    "ดินซีเมนต์ UCS 17.5 ksc":                              "#AAB7B8",
+    "หินคลุก CBR 80%":                                      "#BDC3C7",
+    "วัสดุหมุนเวียน (Recycling)":                           "#85929E",
+    "วัสดุมวลรวม CBR 25%":                                  "#FFCC99",
+    "รองพื้นทางวัสดุมวลรวม CBR 25%":                       "#FFCC99",
+    "วัสดุคัดเลือก ก":                                      "#E8DAEF",
+    "AC รองใต้ผิวคอนกรีต":                                  "#34495E",
+    # Subgrade
+    "ดินถมคันทาง CBR 10%":                                  "#F5CBA7",
+    "ดินถมคันทาง / ดินเดิม":                                "#F5CBA7",
+}
+
+# วัสดุที่ใช้ text สีขาว (배경เข้ม)
+_DARK_LAYERS = {
+    "ผิวทางลาดยาง PMA", "ผิวทางแอสฟัลต์คอนกรีต (AC)",
+    "Concrete Slab", "AC รองใต้ผิวคอนกรีต",
+    "(CTB) หินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc ",
+    "หินคลุกผสมซีเมนต์ UCS 24.5 ksc", "วัสดุหมุนเวียน (Recycling)",
+}
+
+def draw_pavement_structure(layers, mode="flex",
+                             cbr_subgrade=3.0,
+                             d_concrete_cm=None,
+                             ptype="JPCP"):
+    """
+    วาดรูปโครงสร้างชั้นทาง (matplotlib)
+
+    Parameters
+    ----------
+    layers        : list of dict — {name, thickness_cm, ai(flex)/E_MPa(rigid), ...}
+    mode          : "flex" | "rigid"
+    cbr_subgrade  : CBR ดินเดิม (%)
+    d_concrete_cm : ความหนา Slab คอนกรีต (rigid เท่านั้น)
+    ptype         : "JPCP" | "JRCP" | "CRCP"
+    """
+    MIN_H   = 8      # ความสูงขั้นต่ำสำหรับแสดงผล (หน่วย display)
+    W       = 3.2    # ความกว้าง block
+    X_CTR   = 5.5    # กึ่งกลาง X
+    X_START = X_CTR - W / 2
+
+    # ── เตรียม layer list ──
+    all_layers = []
+    if mode == "rigid" and d_concrete_cm:
+        all_layers.append({
+            "name": "Concrete Slab",
+            "thickness_cm": d_concrete_cm,
+            "label": f"Concrete Slab\n({ptype})",
+            "side_info": None,
+        })
+
+    valid = [l for l in layers if l.get("thickness_cm", 0) > 0]
+    for l in valid:
+        name  = l.get("name", "")
+        h     = l.get("thickness_cm", 0)
+        if mode == "flex":
+            ai    = l.get("ai", None)
+            sni   = l.get("sni", None)
+            side  = f"ai={ai:.2f}  SNi={sni:.3f}" if ai and sni else None
+        else:
+            e_mpa = l.get("E_MPa", None)
+            side  = f"E = {e_mpa:,} MPa" if e_mpa else None
+        all_layers.append({"name": name, "thickness_cm": h,
+                            "label": name, "side_info": side})
+
+    # Subgrade row
+    all_layers.append({
+        "name": "ดินถมคันทาง / ดินเดิม",
+        "thickness_cm": 0,   # แสดงเป็น ∞
+        "label": f"Subgrade\nCBR ≥ {cbr_subgrade:.0f}%",
+        "side_info": None,
+    })
+
+    if len(all_layers) <= 1:
+        return None
+
+    # ── คำนวณ display height ──
+    display_h = []
+    for l in all_layers:
+        h = l["thickness_cm"]
+        display_h.append(MIN_H if h == 0 else max(h, MIN_H))
+    total_disp  = sum(display_h)
+    total_thick = sum(l["thickness_cm"] for l in all_layers if l["thickness_cm"] > 0)
+
+    fig, ax = plt.subplots(figsize=(11, max(6, total_disp * 0.35)))
+    ax.set_xlim(0, 13)
+    ax.set_ylim(-6, total_disp + 8)
+    ax.axis('off')
+    fig.patch.set_facecolor('white')
+
+    y = total_disp
+
+    for i, layer in enumerate(all_layers):
+        dh    = display_h[i]
+        name  = layer["name"]
+        label = layer["label"]
+        h_cm  = layer["thickness_cm"]
+        side  = layer["side_info"]
+
+        color   = _LAYER_COLORS.get(name, "#D5D8DC")
+        hatch   = '///' if "หมุนเวียน" in name else None
+        is_dark = name in _DARK_LAYERS
+        txt_col = 'white' if is_dark else '#1A1A1A'
+
+        y_bot = y - dh
+        y_ctr = y_bot + dh / 2
+
+        # วาด rectangle
+        rect = patches.Rectangle(
+            (X_START, y_bot), W, dh,
+            linewidth=1.8, edgecolor='#2C3E50',
+            facecolor=color, hatch=hatch, zorder=2
+        )
+        ax.add_patch(rect)
+
+        # ความหนาในกล่อง
+        h_text = f"{h_cm} cm" if h_cm > 0 else "∞"
+        ax.text(X_CTR, y_ctr, h_text,
+                ha='center', va='center',
+                fontsize=13, fontweight='bold', color=txt_col, zorder=3)
+
+        # ชื่อวัสดุทางซ้าย
+        ax.text(X_START - 0.3, y_ctr, label,
+                ha='right', va='center',
+                fontsize=10.5, fontweight='bold', color='#1B2631',
+                wrap=True, zorder=3)
+
+        # ข้อมูลทางขวา (ai/SNi หรือ E_MPa)
+        if side:
+            ax.text(X_START + W + 0.3, y_ctr, side,
+                    ha='left', va='center',
+                    fontsize=9.5, color='#154360', zorder=3)
+
+        # เส้นคั่นบน (ยกเว้น layer แรก)
+        if i > 0:
+            ax.plot([X_START, X_START + W], [y, y],
+                    color='#2C3E50', lw=1.2, zorder=3)
+
+        y = y_bot
+
+    # ── ลูกศร Total thickness ──
+    x_arr = X_START + W + 3.2
+    y_top_arr = display_h[0] if mode == "rigid" and d_concrete_cm else total_disp
+    # ลูกศรครอบทุก layer ยกเว้น subgrade
+    y_solid_total = sum(display_h[:-1])
+    ax.annotate('', xy=(x_arr, total_disp), xytext=(x_arr, total_disp - y_solid_total),
+                arrowprops=dict(arrowstyle='<->', color='#C0392B', lw=2.0))
+    ax.text(x_arr + 0.25, total_disp - y_solid_total / 2,
+            f"Total\n{total_thick} cm",
+            ha='left', va='center',
+            fontsize=11, color='#C0392B', fontweight='bold')
+
+    # ── กล่องสรุปล่าง ──
+    mode_label = "Flexible (AC)" if mode == "flex" else f"Rigid Concrete ({ptype})"
+    ax.text(X_CTR, -4,
+            f"Pavement Structure — {mode_label}   |   Total = {total_thick} cm",
+            ha='center', va='center', fontsize=11, fontweight='bold',
+            bbox=dict(boxstyle='round,pad=0.5', facecolor='#FEF9E7',
+                      edgecolor='#F39C12', alpha=0.95))
+
+    plt.tight_layout()
+    return fig
+
+
+# ─────────────────────────────────────────────
 #  SEC 7: WORD REPORT FUNCTIONS
 # ─────────────────────────────────────────────
 
@@ -1512,6 +1689,19 @@ with tab3:
                     }
                     if layer_results:
                         st.dataframe(pd.DataFrame(layer_results), use_container_width=True, hide_index=True)
+
+                    # ── รูปโครงสร้างชั้นทาง ──
+                    if layer_results:
+                        fig_flex = draw_pavement_structure(
+                            layer_results, mode="flex",
+                            cbr_subgrade=cbr_fl,
+                        )
+                        if fig_flex:
+                            st.markdown("#### 🖼️ รูปโครงสร้างชั้นทางลาดยาง")
+                            st.pyplot(fig_flex, use_container_width=True)
+                            # บันทึกเป็น bytes สำหรับรายงาน
+                            ss['flex_structure_img'] = fig_to_bytes(fig_flex)
+                            plt.close(fig_flex)
                 else:
                     st.error("ไม่สามารถคำนวณ SN Required ได้ — ตรวจสอบ ESAL และ Mr")
 
@@ -2192,6 +2382,25 @@ with tab4:
                                     DSB = <b>{total_h_cm/2.54:.1f} in</b>
                                 </div>""", unsafe_allow_html=True)
 
+                            # ── รูปโครงสร้างชั้นทาง ──
+                            rigid_layers_for_fig = [
+                                {"name": l["name"],
+                                 "thickness_cm": l["thickness_cm"],
+                                 "E_MPa": l["E_MPa"]}
+                                for l in layer_r
+                            ]
+                            fig_rig = draw_pavement_structure(
+                                rigid_layers_for_fig, mode="rigid",
+                                cbr_subgrade=float(ss.cbr_design or 3.0),
+                                d_concrete_cm=d_sel,
+                                ptype=ptype,
+                            )
+                            if fig_rig:
+                                st.markdown(f"#### 🖼️ รูปโครงสร้างชั้นทางคอนกรีต ({ptype})")
+                                st.pyplot(fig_rig, use_container_width=True)
+                                ss[f'rigid_structure_img_{ptype}'] = fig_to_bytes(fig_rig)
+                                plt.close(fig_rig)
+
     # ── เรียก panel แต่ละประเภท ──
     with sub_jpcp_jrcp:
         st.markdown("""
@@ -2278,9 +2487,46 @@ with tab5:
 
         if chk_rigid and ss.rigid_results:
             b = build_report_rigid(ss_d)
-            if b: st.download_button("📥 Rigid Report", b, "Rigid_Report.docx",
+            if b: st.download_button("📥 Rigid Report (พื้นฐาน)", b, "Rigid_Report.docx",
                                      mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                                      use_container_width=True)
+            # ── รายงานแบบที่ปรึกษา ──
+            st.markdown("---")
+            st.markdown("**📋 รายงาน Rigid แบบที่ปรึกษา**")
+            r_col1, r_col2 = st.columns(2)
+            with r_col1:
+                sec_pfx = st.text_input("เลขหัวข้อ", value="4.5", key="rpt_sec_pfx")
+                fig_pfx = st.text_input("Prefix รูป", value="4-",  key="rpt_fig_pfx")
+            with r_col2:
+                fig_start = st.number_input("เลขรูปเริ่มต้น", value=1, min_value=1, step=1, key="rpt_fig_start2")
+                proj_rpt  = st.text_input("ชื่อโครงการ (รายงาน)", value=ss.get('proj_name',''), key="rpt_proj2")
+            inc_j = st.checkbox("รวม JPCP/JRCP", value=True,  key="rpt_inc_jpcp")
+            inc_c = st.checkbox("รวม CRCP",       value=True,  key="rpt_inc_crcp")
+            inc_s = st.checkbox("รวมบทสรุป",      value=True,  key="rpt_inc_sum")
+            if st.button("📄 สร้างรายงานแบบที่ปรึกษา", type="primary",
+                         use_container_width=True, key="rpt_rigid_pro"):
+                try:
+                    from report_rigid import build_rigid_word_report
+                    b_pro = build_rigid_word_report(
+                        ss              = ss,
+                        section_prefix  = sec_pfx,
+                        fig_prefix      = fig_pfx,
+                        fig_start_num   = int(fig_start),
+                        project_name    = proj_rpt,
+                        include_jpcp    = inc_j,
+                        include_crcp    = inc_c,
+                        include_summary = inc_s,
+                    )
+                    st.download_button(
+                        "📥 Download Rigid Report (ที่ปรึกษา)",
+                        b_pro,
+                        f"Rigid_Pro_{datetime.now().strftime('%Y%m%d_%H%M')}.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        use_container_width=True,
+                        key="dl_rigid_pro"
+                    )
+                except Exception as e:
+                    st.error(f"❌ ไม่สามารถสร้างรายงานได้: {e}")
 
     with col_dl2:
         st.markdown("**รวมทุกส่วน:**")
