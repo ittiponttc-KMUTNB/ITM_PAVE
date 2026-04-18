@@ -643,7 +643,7 @@ def draw_pavement_structure(layers, mode="flex",
     ptype         : "JPCP" | "JRCP" | "CRCP"
     """
     MIN_H   = 4      # ความสูงขั้นต่ำ (display units)
-    W       = 2    # ความกว้าง block
+    W       = 3    # ความกว้าง block
     X_CTR   = 4    # กึ่งกลาง X
     X_START = X_CTR - W / 2
 
