@@ -2089,6 +2089,69 @@ with tab4:
                             Sc = {sc_inp} psi
                         </div>""", unsafe_allow_html=True)
 
+                        # ── k_eff Optimum (W18 Ratio = 1.0) ──
+                        try:
+                            def _w18_at_k(k_try):
+                                return aashto_rigid_w18(
+                                    d_sel, pi_rig, pt_rig2, zr_rig, so_rig,
+                                    sc_inp, cd_val, j_val, ec_psi, k_try
+                                )
+                            # หา k_eff ที่ทำให้ W18_capacity = W18_required
+                            def _eq_k(k_try):
+                                w = _w18_at_k(k_try)
+                                return (w - w18_req) if w else -w18_req
+                            k_opt = None
+                            if _eq_k(10) * _eq_k(1000) < 0:
+                                k_opt = _brentq(_eq_k, 10, 1000, xtol=0.1)
+
+                            if k_opt is not None:
+                                diff_pci = k_eff_inp - k_opt
+                                diff_pct = (diff_pci / k_opt) * 100
+                                opt_css  = "result-info"
+                                st.markdown(f"""
+                                <div class="{opt_css}" style="margin-top:0.6rem;font-size:0.92rem;">
+                                    🎯 <b>k_eff Optimum (W18 Ratio = 1.0 พอดี) = {k_opt:.0f} pci</b><br>
+                                    <small>ใช้อยู่ {k_eff_inp:.0f} pci
+                                    — เผื่อไว้ {diff_pci:+.0f} pci ({diff_pct:+.1f}%)</small>
+                                </div>""", unsafe_allow_html=True)
+
+                                # ── ตาราง Sensitivity k_eff ──
+                                k_base   = [100, 200, 300, 400, 500,
+                                            600, 700, 800, 900, 1000]
+                                k_steps  = sorted(set(
+                                    k_base
+                                    + [int(round(k_opt / 10) * 10)]
+                                    + [int(round(k_eff_inp / 10) * 10)]
+                                ))
+                                k_steps = [k for k in k_steps if 10 <= k <= 1000]
+                                rows_k = []
+                                for kv in k_steps:
+                                    wc = _w18_at_k(kv)
+                                    if wc is None: continue
+                                    r  = wc / w18_req if w18_req > 0 else 0
+                                    is_opt    = abs(kv - round(k_opt))  <= 5
+                                    is_cur    = abs(kv - round(k_eff_inp)) <= 5
+                                    tag = "🎯 Optimum" if is_opt else ("← ใช้อยู่" if is_cur else "")
+                                    rows_k.append({
+                                        "k_eff (pci)": kv,
+                                        "W18 Capacity": f"{wc:,.0f}",
+                                        "W18 Ratio": f"{r:.3f}",
+                                        "สถานะ": ("✅ PASS" if r >= 1.0 else "❌ FAIL") + (f"  {tag}" if tag else ""),
+                                    })
+                                st.markdown("**📊 Sensitivity: W18 Ratio ตาม k_eff**")
+                                st.dataframe(
+                                    pd.DataFrame(rows_k),
+                                    use_container_width=True, hide_index=True
+                                )
+                            else:
+                                st.markdown("""
+                                <div class="result-warn" style="margin-top:0.6rem;font-size:0.88rem;">
+                                    ⚠️ ไม่พบ k_eff Optimum ในช่วง 10–5,000 pci
+                                    (W18 Required อาจสูงหรือต่ำเกินช่วง)
+                                </div>""", unsafe_allow_html=True)
+                        except Exception:
+                            pass
+
                         # ── บันทึกผลลัพธ์ ──
                         if not isinstance(ss.rigid_results, dict):
                             ss.rigid_results = {}
