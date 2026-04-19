@@ -297,7 +297,7 @@ def ealf_flex(L1_ton, L2, SN, Pt):
 
 def ealf_rigid(L1_ton, L2, D_cm, Pt):
     L1  = L1_ton * TON_TO_KIP
-    D   = D_cm / 2.54
+    D   = round(D_cm / 2.54)   # AASHTO 1993 ใช้ความหนาเป็นจำนวนเต็มนิ้ว
     Gt  = math.log10((4.5 - Pt) / (4.5 - 1.5))
     Bx  = 1.0 + 3.63*(L1+L2)**5.20 / ((D+1)**8.46 * L2**3.52)
     B18 = 1.0 + 3.63*(18+1)**5.20  / ((D+1)**8.46 * 1.0**3.52)
