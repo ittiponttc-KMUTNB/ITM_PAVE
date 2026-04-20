@@ -1609,14 +1609,38 @@ with tab3:
                         if do_sub:
                             sc1, sc2, sc3 = st.columns(3)
                             with sc1:
-                                h_wear = st.number_input("Wearing (cm)", value=5, step=1,
-                                                         min_value=0, key=f"fwear_{li}")
+                                h_wear = st.number_input(
+                                    "Wearing (cm)", value=5, step=1,
+                                    min_value=0, key=f"fwear_{li}",
+                                    help="มาตรฐานกรมทางหลวง: 4–7 cm (40–70 mm)"
+                                )
                             with sc2:
-                                h_bind = st.number_input("Binder (cm)", value=7, step=1,
-                                                         min_value=0, key=f"fbind_{li}")
+                                h_bind = st.number_input(
+                                    "Binder (cm)", value=5, step=1,
+                                    min_value=0, key=f"fbind_{li}",
+                                    help="มาตรฐานกรมทางหลวง: 4–8 cm (40–80 mm)"
+                                )
                             with sc3:
-                                h_base = st.number_input("Base (cm)", value=10, step=1,
-                                                         min_value=0, key=f"fbase_{li}")
+                                h_base = st.number_input(
+                                    "Base (cm)", value=7, step=1,
+                                    min_value=0, key=f"fbase_{li}",
+                                    help="มาตรฐานกรมทางหลวง: 7–10 cm (70–100 mm)"
+                                )
+                            # ── แจ้งเตือนเมื่อเกินช่วงมาตรฐาน ──
+                            warn_msgs = []
+                            if h_wear > 0 and not (4 <= h_wear <= 7):
+                                warn_msgs.append(f"⚠️ Wearing {h_wear} cm เกินช่วงมาตรฐาน (4–7 cm)")
+                            if h_bind > 0 and not (4 <= h_bind <= 8):
+                                warn_msgs.append(f"⚠️ Binder {h_bind} cm เกินช่วงมาตรฐาน (4–8 cm)")
+                            if h_base > 0 and not (7 <= h_base <= 10):
+                                warn_msgs.append(f"⚠️ Base {h_base} cm เกินช่วงมาตรฐาน (7–10 cm)")
+                            if warn_msgs:
+                                st.markdown(
+                                    f'<div class="result-warn" style="font-size:0.82rem;margin-top:0.3rem;">'
+                                    + "<br>".join(warn_msgs) +
+                                    "</div>",
+                                    unsafe_allow_html=True
+                                )
                             h_total = h_wear + h_bind + h_base
                             h_in_total = h_total / 2.54
                             sn_i = ai * h_in_total * mi_f
