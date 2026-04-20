@@ -1711,14 +1711,22 @@ with tab3:
 
                     # ── รูปโครงสร้างชั้นทาง ──
                     if layer_results:
+                        flex_layers_fig = [
+                            {
+                                'name':         l.get('material', ''),
+                                'thickness_cm': l.get('h_cm', 0),
+                                'ai':           l.get('ai', None),
+                                'sni':          l.get('sni', None),
+                            }
+                            for l in layer_results
+                        ]
                         fig_flex = draw_pavement_structure(
-                            layer_results, mode="flex",
+                            flex_layers_fig, mode="flex",
                             cbr_subgrade=cbr_fl,
                         )
                         if fig_flex:
                             st.markdown("#### 🖼️ รูปโครงสร้างชั้นทางลาดยาง")
                             st.pyplot(fig_flex, use_container_width=True)
-                            # บันทึกเป็น bytes สำหรับรายงาน
                             ss['flex_structure_img'] = fig_to_bytes(fig_flex)
                             plt.close(fig_flex)
                 else:
