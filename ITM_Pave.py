@@ -1538,7 +1538,7 @@ with tab3:
                                      step=0.5, min_value=0.5, key="cbr_fl")
         with c2:
             mr_fl_auto = cbr_to_mr(cbr_fl)
-            mr_fl = st.number_input("Mr (psi) [อัตโนมัติ]", value=float(ss.mr_subgrade_psi) if ss.mr_subgrade_psi else mr_fl_auto,
+            mr_fl = st.number_input("Mr (psi) [อัตโนมัติ]", value=mr_fl_auto,
                                     step=500.0, min_value=500.0, key="mr_fl")
         st.markdown(f"Mr = **{mr_fl:,.0f} psi**  ({mr_fl/145.038:.1f} MPa)")
         st.markdown('</div>', unsafe_allow_html=True)
