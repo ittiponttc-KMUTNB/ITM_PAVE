@@ -1522,11 +1522,14 @@ with tab2:
 # ─────────────────────────────────────────────
 def _aashto_badge(esal, zr, so, pi, pt, mr_psi_layer, cum_sn_before, ai, mi, h_cm):
     """
-    คำนวณ D_min ตาม AASHTO 1993 แต่ละชั้น:
-        SN_req_i  = aashto_sn_required(ESAL, ZR, So, Pi, Pt, Mr_i)
+    AASHTO 1993 D_min badge — แต่ละชั้นใช้ Mr ของวัสดุชั้นนั้น
+        SN_req_i  = f(ESAL, Mr_วัสดุชั้นนั้น)
         D_min_i   = (SN_req_i − ΣSN_prev) / (ai × mi)  [in → cm]
+        ΣSN_prev  = SNi จากความหนาจริงที่ผู้ใช้กรอกของชั้นก่อนหน้า
     """
-    if ai is None or ai <= 0 or mr_psi_layer is None or mr_psi_layer <= 0:
+    if ai is None or ai <= 0 or not mr_psi_layer or mr_psi_layer <= 0:
+        return ""
+    if not esal or esal <= 0:
         return ""
     try:
         sn_req_i = aashto_sn_required(esal, zr, so, pi, pt, mr_psi_layer) or 0.0
@@ -1534,29 +1537,26 @@ def _aashto_badge(esal, zr, so, pi, pt, mr_psi_layer, cum_sn_before, ai, mi, h_c
         return ""
     if sn_req_i <= 0:
         return ""
-
     sn_remaining = sn_req_i - cum_sn_before
     if sn_remaining <= 0:
         return ('<div style="font-size:0.78rem;font-weight:600;'
                 'background:#E8F5E9;border-radius:5px;padding:0.2rem 0.5rem;'
                 'margin-top:0.25rem;border:1px solid #A5D6A7;color:#1B5E20;">'
                 '✅ ผ่าน — ชั้นบนรับ SN ครบแล้ว</div>')
-
     d_min_in = sn_remaining / (ai * mi)
     d_min_cm = d_min_in * 2.54
     passed   = h_cm >= d_min_cm - 0.05
-
     if passed:
         return (f'<div style="font-size:0.78rem;font-weight:600;'
                 f'background:#E8F5E9;border-radius:5px;padding:0.2rem 0.5rem;'
                 f'margin-top:0.25rem;border:1px solid #A5D6A7;color:#1B5E20;">'
-                f'✅ ผ่าน &nbsp;(D<sub>min</sub> = {d_min_cm:.1f} ซม.)</div>')
+                f'✅ ผ่าน &nbsp;(D<sub>min</sub> = {d_min_cm:.1f} ซม. | {d_min_in:.2f} in)</div>')
     else:
         return (f'<div style="font-size:0.78rem;font-weight:600;'
                 f'background:#FFF8E1;border-radius:5px;padding:0.2rem 0.5rem;'
                 f'margin-top:0.25rem;border:1px solid #FFE082;color:#E65100;">'
-                f'💡 ต้องการ D<sub>min</sub> = {d_min_cm:.1f} ซม. '
-                f'&nbsp;(กรอกอยู่ {h_cm} ซม.)</div>')
+                f'💡 ต้องการ D<sub>min</sub> = {d_min_cm:.1f} ซม. ({d_min_in:.2f} in)'
+                f' &nbsp;(กรอกอยู่ {h_cm} ซม.)</div>')
 
 # ─────────────────────────────────────────────
 #  CBR ↔ Mr SYNC CALLBACKS
@@ -1659,7 +1659,7 @@ with tab3:
         cum_sn        = 0.0
         cum_sn_provided = 0.0   # ΣSN เฉพาะชั้นที่มี h>0 สำหรับ D_min badge
 
-        # ── พารามิเตอร์สำหรับ _aashto_badge คำนวณ D_min แต่ละชั้น ──
+        # ── คำนวณ SN_required จาก Mr Subgrade (ค่าเดียวใช้ทุกชั้น) ──
         _zr_fl      = ZR_MAP.get(ss.get('r0_fl', 90), -1.282)
         _so_fl      = ss.get('so_fl', 0.45)
         _pi_fl      = ss.get('pi_fl', 4.2)
@@ -1669,6 +1669,11 @@ with tab3:
         _esal_f     = ss.get('esal_flex', {})
         _esal_f_val = list(_esal_f.values())[ss.get('flex_sn_sel', 0)] \
                       if _esal_f else float(ss.get('flex_esal_manual', 0))
+        _mr_sub     = float(ss.get('mr_fl_val', 4500.0))   # Mr Subgrade
+        try:
+            _sn_req = aashto_sn_required(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, _mr_sub) or 0.0
+        except:
+            _sn_req = 0.0
 
         for li in range(6):
             lc0, lc1, lc2, lc3 = st.columns([3, 1, 1, 4])
