@@ -1777,21 +1777,27 @@ with tab3:
                             h_total = h_wear + h_bind + h_base
                             h_in_total = h_total / 2.54
                             sn_i = ai * h_in_total * mi_f
-                            _cum_sn_before = cum_sn_provided   # ΣSN ชั้นบนที่ provide แล้ว
+                            _cum_sn_before = cum_sn_provided
                             cum_sn += sn_i
                             cum_sn_provided += sn_i
+                            # คำนวณ SN_req_i สำหรับ display
+                            try:
+                                _sn_req_i = aashto_sn_required(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, mr_psi_layer) or 0.0
+                            except:
+                                _sn_req_i = 0.0
                             layer_results.append({
                                 'layer': li+1, 'material': mat_f,
                                 'h_cm': h_total, 'ai': ai, 'mi': mi_f,
                                 'sni': round(sn_i,3), 'cum_sn': round(cum_sn,3),
                                 'sub': {'wear': h_wear, 'bind': h_bind, 'base': h_base}
                             })
+                            _sn_req_str = f' | SN_req={_sn_req_i:.3f}' if _sn_req_i > 0 else ''
                             st.markdown(
                                 f'<div style="padding:0.35rem 0.5rem;font-size:0.80rem;'
                                 f'font-family:monospace;background:var(--color-background-secondary);'
                                 f'border-radius:6px;margin-top:0.2rem;">'
                                 f'Wearing={h_wear}+Binder={h_bind}+Base={h_base} = <b>{h_total} cm</b>'
-                                f' | ai={ai:.2f} | SNi={sn_i:.3f} | <b>ΣSNi={cum_sn:.3f}</b>'
+                                f' | ai={ai:.2f} | SNi={sn_i:.3f} | <b>ΣSNi={cum_sn:.3f}</b>{_sn_req_str}'
                                 f'</div>',
                                 unsafe_allow_html=True
                             )
@@ -1805,17 +1811,22 @@ with tab3:
                             _cum_sn_before = cum_sn_provided
                             cum_sn += sn_i
                             cum_sn_provided += sn_i
+                            try:
+                                _sn_req_i = aashto_sn_required(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, mr_psi_layer) or 0.0
+                            except:
+                                _sn_req_i = 0.0
                             layer_results.append({
                                 'layer': li+1, 'material': mat_f,
                                 'h_cm': h_f, 'ai': ai, 'mi': mi_f,
                                 'sni': round(sn_i,3), 'cum_sn': round(cum_sn,3)
                             })
+                            _sn_req_str = f' | SN_req={_sn_req_i:.3f}' if _sn_req_i > 0 else ''
                             st.markdown(
                                 f'<div style="padding:0.35rem 0.5rem;font-size:0.82rem;'
                                 f'font-family:monospace;background:var(--color-background-secondary);'
                                 f'border-radius:6px;margin-top:0.25rem;">'
                                 f'<b>{h_f} cm</b> | ai={ai:.2f} | mi={mi_f:.1f} | '
-                                f'SNi={sn_i:.3f} | <b>ΣSNi={cum_sn:.3f}</b>'
+                                f'SNi={sn_i:.3f} | <b>ΣSNi={cum_sn:.3f}</b>{_sn_req_str}'
                                 f'</div>',
                                 unsafe_allow_html=True
                             )
@@ -1829,17 +1840,22 @@ with tab3:
                         _cum_sn_before = cum_sn_provided
                         cum_sn += sn_i
                         cum_sn_provided += sn_i
+                        try:
+                            _sn_req_i = aashto_sn_required(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, mr_psi_layer) or 0.0
+                        except:
+                            _sn_req_i = 0.0
                         layer_results.append({
                             'layer': li+1, 'material': mat_f,
                             'h_cm': h_f, 'ai': ai, 'mi': mi_f,
                             'sni': round(sn_i,3), 'cum_sn': round(cum_sn,3)
                         })
+                        _sn_req_str = f' | SN_req={_sn_req_i:.3f}' if _sn_req_i > 0 else ''
                         st.markdown(
                             f'<div style="padding:0.35rem 0.5rem;font-size:0.82rem;'
                             f'font-family:monospace;background:var(--color-background-secondary);'
                             f'border-radius:6px;margin-top:0.25rem;">'
                             f'<b>{h_f} cm</b> | ai={ai:.2f} | mi={mi_f:.1f} | '
-                            f'SNi={sn_i:.3f} | <b>ΣSNi={cum_sn:.3f}</b>'
+                            f'SNi={sn_i:.3f} | <b>ΣSNi={cum_sn:.3f}</b>{_sn_req_str}'
                             f'</div>',
                             unsafe_allow_html=True
                         )
