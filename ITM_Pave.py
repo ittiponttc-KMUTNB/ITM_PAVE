@@ -1515,15 +1515,15 @@ with tab2:
 # ─────────────────────────────────────────────
 def _on_cbr_fl_change():
     """CBR เปลี่ยน → คำนวณ Mr อัตโนมัติ"""
-    cbr_val = st.session_state.get('cbr_fl_input', 3.0)
+    cbr_val = max(0.5, float(st.session_state.get('cbr_fl_input', 3.0)))
     st.session_state['cbr_fl_val'] = cbr_val
-    st.session_state['mr_fl_val']  = cbr_to_mr(cbr_val)
+    st.session_state['mr_fl_val']  = max(500.0, cbr_to_mr(cbr_val))
 
 def _on_mr_fl_change():
     """Mr เปลี่ยน → คำนวณ CBR ย้อนกลับ"""
-    mr_val = st.session_state.get('mr_fl_input', 4500.0)
+    mr_val = max(500.0, float(st.session_state.get('mr_fl_input', 4500.0)))
     st.session_state['mr_fl_val']  = mr_val
-    st.session_state['cbr_fl_val'] = mr_val / 1500.0
+    st.session_state['cbr_fl_val'] = max(0.5, mr_val / 1500.0)
 
 # ══════════════════════════════════════════════
 #  TAB 3: FLEXIBLE DESIGN
@@ -1554,10 +1554,13 @@ with tab3:
         if abs(ss.get('cbr_fl_val', 0) - _cbr_from_tab2) > 0.001 and ss.get('_cbr_fl_user_edited') != True:
             ss['cbr_fl_val'] = _cbr_from_tab2
             ss['mr_fl_val']  = cbr_to_mr(_cbr_from_tab2)
+        # ── clamp ค่าให้อยู่ในช่วง min ก่อน render ──
+        ss['cbr_fl_val'] = max(0.5, float(ss.get('cbr_fl_val', 3.0)))
+        ss['mr_fl_val']  = max(500.0, float(ss.get('mr_fl_val', 4500.0)))
         c1, c2 = st.columns(2)
         with c1:
             st.number_input(
-                "CBR (%)", value=float(ss['cbr_fl_val']),
+                "CBR (%)", value=ss['cbr_fl_val'],
                 step=0.5, min_value=0.5,
                 key="cbr_fl_input",
                 on_change=_on_cbr_fl_change
@@ -1566,7 +1569,7 @@ with tab3:
         with c2:
             st.number_input(
                 "Mr (psi) [กรอกหรือคำนวณอัตโนมัติ]",
-                value=float(ss['mr_fl_val']),
+                value=ss['mr_fl_val'],
                 step=500.0, min_value=500.0,
                 key="mr_fl_input",
                 on_change=_on_mr_fl_change
