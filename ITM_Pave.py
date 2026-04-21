@@ -1652,6 +1652,7 @@ with tab3:
         mat_options   = list(FLEX_LAYER_MATERIALS.keys())
         layer_results = []
         cum_sn        = 0.0
+        cum_sn_provided = 0.0   # ΣSN เฉพาะชั้นที่มี h>0 สำหรับ D_min badge
 
         # ── คำนวณ SN Required ล่วงหน้าสำหรับ Smart Recommendation ──
         _zr_fl   = ZR_MAP.get(ss.get('r0_fl', 90), -1.282)
@@ -1762,8 +1763,9 @@ with tab3:
                             h_total = h_wear + h_bind + h_base
                             h_in_total = h_total / 2.54
                             sn_i = ai * h_in_total * mi_f
-                            _cum_sn_before = cum_sn          # บันทึก ΣSN ก่อนบวกชั้นนี้
+                            _cum_sn_before = cum_sn_provided   # ΣSN ชั้นบนที่ provide แล้ว
                             cum_sn += sn_i
+                            cum_sn_provided += sn_i
                             layer_results.append({
                                 'layer': li+1, 'material': mat_f,
                                 'h_cm': h_total, 'ai': ai, 'mi': mi_f,
@@ -1786,8 +1788,9 @@ with tab3:
                         else:
                             h_in = h_f / 2.54
                             sn_i = ai * h_in * mi_f
-                            _cum_sn_before = cum_sn
+                            _cum_sn_before = cum_sn_provided
                             cum_sn += sn_i
+                            cum_sn_provided += sn_i
                             layer_results.append({
                                 'layer': li+1, 'material': mat_f,
                                 'h_cm': h_f, 'ai': ai, 'mi': mi_f,
@@ -1809,8 +1812,9 @@ with tab3:
                     else:
                         h_in = h_f / 2.54
                         sn_i = ai * h_in * mi_f
-                        _cum_sn_before = cum_sn
+                        _cum_sn_before = cum_sn_provided
                         cum_sn += sn_i
+                        cum_sn_provided += sn_i
                         layer_results.append({
                             'layer': li+1, 'material': mat_f,
                             'h_cm': h_f, 'ai': ai, 'mi': mi_f,
