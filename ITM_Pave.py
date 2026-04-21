@@ -1030,6 +1030,8 @@ def ss_init():
         'k_subgrade_pci':  231.9,
         # Flexible
         'flex_results':    {},
+        'cbr_fl_val':      3.0,
+        'mr_fl_val':       4500.0,
         # K-Value
         'k_inf':           0.0,
         'k_corrected':     0.0,
@@ -1508,6 +1510,21 @@ with tab2:
             with c4: st.metric("Mean", f"{np.mean(ss.cbr_values):.2f}%")
             st.markdown('</div>', unsafe_allow_html=True)
 
+# ─────────────────────────────────────────────
+#  CBR ↔ Mr SYNC CALLBACKS
+# ─────────────────────────────────────────────
+def _on_cbr_fl_change():
+    """CBR เปลี่ยน → คำนวณ Mr อัตโนมัติ"""
+    cbr_val = st.session_state.get('cbr_fl_input', 3.0)
+    st.session_state['cbr_fl_val'] = cbr_val
+    st.session_state['mr_fl_val']  = cbr_to_mr(cbr_val)
+
+def _on_mr_fl_change():
+    """Mr เปลี่ยน → คำนวณ CBR ย้อนกลับ"""
+    mr_val = st.session_state.get('mr_fl_input', 4500.0)
+    st.session_state['mr_fl_val']  = mr_val
+    st.session_state['cbr_fl_val'] = mr_val / 1500.0
+
 # ══════════════════════════════════════════════
 #  TAB 3: FLEXIBLE DESIGN
 # ══════════════════════════════════════════════
@@ -1532,14 +1549,30 @@ with tab3:
         st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown('<div class="card"><h4>🌍 Subgrade</h4>', unsafe_allow_html=True)
+        # ── Sync init: ถ้า cbr_design เพิ่งโหลดมาจาก TAB2 ให้อัพเดต ss ด้วย ──
+        _cbr_from_tab2 = float(ss.cbr_design) if ss.cbr_design else 3.0
+        if abs(ss.get('cbr_fl_val', 0) - _cbr_from_tab2) > 0.001 and ss.get('_cbr_fl_user_edited') != True:
+            ss['cbr_fl_val'] = _cbr_from_tab2
+            ss['mr_fl_val']  = cbr_to_mr(_cbr_from_tab2)
         c1, c2 = st.columns(2)
         with c1:
-            cbr_fl = st.number_input("CBR (%)", value=float(ss.cbr_design) if ss.cbr_design else 3.0,
-                                     step=0.5, min_value=0.5, key="cbr_fl")
+            st.number_input(
+                "CBR (%)", value=float(ss['cbr_fl_val']),
+                step=0.5, min_value=0.5,
+                key="cbr_fl_input",
+                on_change=_on_cbr_fl_change
+            )
+            cbr_fl = ss['cbr_fl_val']
         with c2:
-            mr_fl_auto = cbr_to_mr(cbr_fl)
-            mr_fl = st.number_input("Mr (psi) [อัตโนมัติ]", value=mr_fl_auto,
-                                    step=500.0, min_value=500.0, key="mr_fl")
+            st.number_input(
+                "Mr (psi) [กรอกหรือคำนวณอัตโนมัติ]",
+                value=float(ss['mr_fl_val']),
+                step=500.0, min_value=500.0,
+                key="mr_fl_input",
+                on_change=_on_mr_fl_change
+            )
+            mr_fl = ss['mr_fl_val']
+        ss['_cbr_fl_user_edited'] = True
         st.markdown(f"Mr = **{mr_fl:,.0f} psi**  ({mr_fl/145.038:.1f} MPa)")
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1550,8 +1583,14 @@ with tab3:
             st.caption(f"ZR = {ZR_MAP[r0_fl]}")
         with c2: so_fl = st.number_input("So", value=0.45, step=0.01, min_value=0.3, max_value=0.6, key="so_fl")
         with c3: pi_fl = st.number_input("Pi", value=4.2, step=0.1, key="pi_fl")
-        with c4: pt_fl2 = st.number_input("Pt", value=float(ss.get("_pt_sync", ss.pt_global)), step=0.1, key="pt_fl2",
-                                           help="Default จาก TAB 1 — แก้ได้")
+        with c4:
+            use_pt_global_fl = st.checkbox("ใช้ Pt Global", value=ss.get('use_pt_global_fl', True), key="use_pt_global_fl")
+            if use_pt_global_fl:
+                pt_fl2 = float(ss.get('pt_global', 2.5))
+                st.caption(f"Pt = {pt_fl2} (Global)")
+            else:
+                pt_fl2 = st.number_input("Pt (Override)", value=float(ss.get('pt_fl2_override', ss.get('pt_global', 2.5))),
+                                          step=0.1, min_value=2.0, max_value=3.0, key="pt_fl2_override")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_fr:
@@ -1568,14 +1607,47 @@ with tab3:
         layer_results = []
         cum_sn        = 0.0
 
+        # ── คำนวณ SN Required ล่วงหน้าสำหรับ Smart Recommendation ──
+        _zr_fl   = ZR_MAP.get(ss.get('r0_fl', 90), -1.282)
+        _so_fl   = ss.get('so_fl', 0.45)
+        _pi_fl   = ss.get('pi_fl', 4.2)
+        _pt_fl2  = ss.get('pt_fl2', float(ss.get('pt_global', 2.5)))
+        _mr_fl   = float(ss.get('mr_fl_val', 4500.0))
+        _esal_f  = ss.get('esal_flex', {})
+        _esal_f_val = list(_esal_f.values())[ss.get('flex_sn_sel', 0)] if _esal_f else ss.get('flex_esal_manual', 0)
+        try:
+            _sn_req = aashto_sn_required(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, _mr_fl) or 0.0
+        except:
+            _sn_req = 0.0
+
         for li in range(6):
             lc0, lc1, lc2, lc3 = st.columns([3, 1, 1, 4])
+
+            # ── ตรวจ do_sub ล่วงหน้า (ก่อน render lc1) ──
+            _is_ac_mat = ss.get(f"fmat_{li}", mat_options[0]) in AC_SURFACE_MATERIALS
+            _do_sub_now = ss.get(f"fsub_{li}", False) and _is_ac_mat
+
             with lc0:
                 mat_f = st.selectbox(f"L{li+1}", mat_options,
                                      key=f"fmat_{li}", label_visibility="collapsed")
             with lc1:
-                h_f = st.number_input("cm", value=0, step=1, min_value=0,
-                                      key=f"fh_{li}", label_visibility="collapsed")
+                if _do_sub_now:
+                    # ── #3: read-only แสดงผลรวมชั้นย่อย ──
+                    _h_wear_now = ss.get(f"fwear_{li}", 5)
+                    _h_bind_now = ss.get(f"fbind_{li}", 5)
+                    _h_base_now = ss.get(f"fbase_{li}", 7)
+                    _h_total_now = _h_wear_now + _h_bind_now + _h_base_now
+                    st.markdown(
+                        f'<div style="padding:0.45rem 0.3rem;font-size:0.88rem;'
+                        f'font-weight:700;text-align:center;color:#1B5E20;'
+                        f'background:#E8F5E9;border-radius:6px;border:1px solid #A5D6A7;">'
+                        f'{_h_total_now} 🔒</div>',
+                        unsafe_allow_html=True
+                    )
+                    h_f = _h_total_now
+                else:
+                    h_f = st.number_input("cm", value=0, step=1, min_value=0,
+                                          key=f"fh_{li}", label_visibility="collapsed")
             with lc2:
                 is_ac = mat_f in AC_MATERIALS_LOCK_MI
                 if mat_f != "ไม่เลือก":
@@ -1660,6 +1732,14 @@ with tab3:
                                 f'</div>',
                                 unsafe_allow_html=True
                             )
+                            # ── #4 Smart Recommendation ──
+                            if _sn_req > 0:
+                                _sn_gap = _sn_req - cum_sn
+                                if _sn_gap <= 0:
+                                    st.markdown('<div style="font-size:0.78rem;color:#2E7D32;margin-top:0.2rem;">✅ SN เพียงพอแล้ว</div>', unsafe_allow_html=True)
+                                elif ai and ai > 0:
+                                    _h_rec = (_sn_gap / (ai * mi_f)) * 2.54
+                                    st.markdown(f'<div style="font-size:0.78rem;color:#E65100;margin-top:0.2rem;">💡 แนะนำเพิ่มอีก ≥ <b>{_h_rec:.1f} cm</b> เพื่อให้ SN รวมครบ</div>', unsafe_allow_html=True)
                         else:
                             h_in = h_f / 2.54
                             sn_i = ai * h_in * mi_f
@@ -1678,6 +1758,14 @@ with tab3:
                                 f'</div>',
                                 unsafe_allow_html=True
                             )
+                            # ── #4 Smart Recommendation ──
+                            if _sn_req > 0:
+                                _sn_gap = _sn_req - cum_sn
+                                if _sn_gap <= 0:
+                                    st.markdown('<div style="font-size:0.78rem;color:#2E7D32;margin-top:0.2rem;">✅ SN เพียงพอแล้ว</div>', unsafe_allow_html=True)
+                                elif ai and ai > 0:
+                                    _h_rec = (_sn_gap / (ai * mi_f)) * 2.54
+                                    st.markdown(f'<div style="font-size:0.78rem;color:#E65100;margin-top:0.2rem;">💡 แนะนำเพิ่มอีก ≥ <b>{_h_rec:.1f} cm</b> เพื่อให้ SN รวมครบ</div>', unsafe_allow_html=True)
                     else:
                         h_in = h_f / 2.54
                         sn_i = ai * h_in * mi_f
@@ -1696,6 +1784,14 @@ with tab3:
                             f'</div>',
                             unsafe_allow_html=True
                         )
+                        # ── #4 Smart Recommendation ──
+                        if _sn_req > 0:
+                            _sn_gap = _sn_req - cum_sn
+                            if _sn_gap <= 0:
+                                st.markdown('<div style="font-size:0.78rem;color:#2E7D32;margin-top:0.2rem;">✅ SN เพียงพอแล้ว</div>', unsafe_allow_html=True)
+                            elif ai and ai > 0:
+                                _h_rec = (_sn_gap / (ai * mi_f)) * 2.54
+                                st.markdown(f'<div style="font-size:0.78rem;color:#E65100;margin-top:0.2rem;">💡 แนะนำเพิ่มอีก ≥ <b>{_h_rec:.1f} cm</b> เพื่อให้ SN รวมครบ</div>', unsafe_allow_html=True)
                 else:
                     st.markdown("")
 
@@ -2073,8 +2169,13 @@ with tab4:
     with rp5:
         pi_rig = st.number_input("Pi", value=4.5, step=0.1, key="pi_rig")
     with rp6:
-        pt_rig2 = st.number_input("Pt", value=float(ss.get("_pt_sync", ss.pt_global)), step=0.1,
-                                   key="pt_rig2", help="Default จาก TAB 1 — แก้ได้")
+        use_pt_global_rig = st.checkbox("ใช้ Pt Global", value=ss.get('use_pt_global_rig', True), key="use_pt_global_rig")
+        if use_pt_global_rig:
+            pt_rig2 = float(ss.get('pt_global', 2.5))
+            st.caption(f"Pt = {pt_rig2} (Global)")
+        else:
+            pt_rig2 = st.number_input("Pt (Override)", value=float(ss.get('pt_rig2_override', ss.get('pt_global', 2.5))),
+                                       step=0.1, min_value=2.0, max_value=3.0, key="pt_rig2_override")
 
     st.markdown(
         f"Ec = **{ec_psi:,.0f} psi** &nbsp;|&nbsp; "
