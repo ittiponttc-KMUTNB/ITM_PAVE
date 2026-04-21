@@ -1675,6 +1675,19 @@ with tab3:
         except:
             _sn_req = 0.0
 
+        # ── Pre-compute Mr ชั้นถัดไป สำหรับ D_min badge ──
+        # ชั้นที่ i ใช้ Mr ของชั้น i+1, ชั้นสุดท้ายใช้ Mr Subgrade
+        def _get_mr_of_layer(layer_idx):
+            """ดึง Mr (psi) ของชั้น layer_idx จาก session_state"""
+            mat = ss.get(f"fmat_{layer_idx}", "ไม่เลือก")
+            if mat == "ไม่เลือก" or mat not in FLEX_LAYER_MATERIALS:
+                return None
+            _, _, mr = FLEX_LAYER_MATERIALS[mat]
+            if mat == "ดินถมคันทาง CBR กรอกเอง":
+                cbr = ss.get(f"fcbr_sub_{layer_idx}", 10.0)
+                mr = cbr * 10.0 * 145.038
+            return mr if mr and mr > 0 else None
+
         for li in range(6):
             lc0, lc1, lc2, lc3 = st.columns([3, 1, 1, 4])
 
@@ -1787,7 +1800,7 @@ with tab3:
                             cum_sn_provided += sn_i
                             # คำนวณ SN_req_i สำหรับ display
                             try:
-                                _sn_req_i = aashto_sn_required(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, mr_psi_layer) or 0.0
+                                _sn_req_i = aashto_sn_required(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, (_get_mr_of_layer(li+1) or _mr_sub)) or 0.0
                             except:
                                 _sn_req_i = 0.0
                             layer_results.append({
@@ -1807,7 +1820,7 @@ with tab3:
                                 unsafe_allow_html=True
                             )
                             # ── #4 Smart Recommendation (AASHTO D_min) ──
-                            _badge = _aashto_badge(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, mr_psi_layer, _cum_sn_before, ai, mi_f, h_total)
+                            _badge = _aashto_badge(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, (_get_mr_of_layer(li+1) or _mr_sub), _cum_sn_before, ai, mi_f, h_total)
                             if _badge:
                                 st.markdown(_badge, unsafe_allow_html=True)
                         else:
@@ -1817,7 +1830,7 @@ with tab3:
                             cum_sn += sn_i
                             cum_sn_provided += sn_i
                             try:
-                                _sn_req_i = aashto_sn_required(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, mr_psi_layer) or 0.0
+                                _sn_req_i = aashto_sn_required(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, (_get_mr_of_layer(li+1) or _mr_sub)) or 0.0
                             except:
                                 _sn_req_i = 0.0
                             layer_results.append({
@@ -1836,7 +1849,7 @@ with tab3:
                                 unsafe_allow_html=True
                             )
                             # ── #4 Smart Recommendation (AASHTO D_min) ──
-                            _badge = _aashto_badge(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, mr_psi_layer, _cum_sn_before, ai, mi_f, h_f)
+                            _badge = _aashto_badge(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, (_get_mr_of_layer(li+1) or _mr_sub), _cum_sn_before, ai, mi_f, h_f)
                             if _badge:
                                 st.markdown(_badge, unsafe_allow_html=True)
                     else:
@@ -1846,7 +1859,7 @@ with tab3:
                         cum_sn += sn_i
                         cum_sn_provided += sn_i
                         try:
-                            _sn_req_i = aashto_sn_required(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, mr_psi_layer) or 0.0
+                            _sn_req_i = aashto_sn_required(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, (_get_mr_of_layer(li+1) or _mr_sub)) or 0.0
                         except:
                             _sn_req_i = 0.0
                         layer_results.append({
@@ -1865,7 +1878,7 @@ with tab3:
                             unsafe_allow_html=True
                         )
                         # ── #4 Smart Recommendation (AASHTO D_min) ──
-                        _badge = _aashto_badge(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, mr_psi_layer, _cum_sn_before, ai, mi_f, h_f)
+                        _badge = _aashto_badge(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, (_get_mr_of_layer(li+1) or _mr_sub), _cum_sn_before, ai, mi_f, h_f)
                         if _badge:
                             st.markdown(_badge, unsafe_allow_html=True)
                 else:
