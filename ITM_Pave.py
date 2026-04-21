@@ -236,17 +236,24 @@ AC_SURFACE_MATERIALS = {
 }
 
 FLEX_LAYER_MATERIALS = {
-    "ไม่เลือก":                                              (None, None),
-    "ผิวทางลาดยาง PMA":                                      (0.44, 1.0),
-    "ผิวทางแอสฟัลต์คอนกรีต (AC)":                           (0.40, 1.0),
-    "(CTB) หินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc ": (0.18, 1.0),
-    "หินคลุกผสมซีเมนต์ UCS 24.5 ksc":               (0.15, 1.0),
-    "ดินซีเมนต์ UCS 17.5 ksc":                       (0.13, 1.0),
-    "หินคลุก CBR 80%":                               (0.13, 1.0),
-    "วัสดุหมุนเวียน (Recycling)":                    (0.15, 1.0),
-    "วัสดุมวลรวม CBR 25%":                        (0.10, 1.0),
-    "วัสดุคัดเลือก ก":                                       (0.08, 1.0),
-    "ดินถมคันทาง CBR 10%":                                   (0.08, 1.0),
+    # key: (ai, mi_default, Mr_psi)
+    # Mr_psi = None → คำนวณจาก CBR ที่กรอก (เฉพาะ ดินถมคันทาง)
+    "ไม่เลือก":                                              (None, None, None),
+    "ผิวทางลาดยาง PMA":                                      (0.44, 1.0, 536_500),
+    "ผิวทางแอสฟัลต์คอนกรีต (AC)":                           (0.40, 1.0, 362_500),
+    "(CTB) หินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc ":     (0.18, 1.0, 174_000),
+    "หินคลุกผสมซีเมนต์ UCS 24.5 ksc":                       (0.15, 1.0, 123_250),
+    "ดินซีเมนต์ UCS 17.5 ksc":                               (0.13, 1.0,  50_750),
+    "หินคลุก CBR 80%":                                       (0.13, 1.0,  50_750),
+    "วัสดุหมุนเวียน (Recycling)":                            (0.15, 1.0, 123_250),
+    "วัสดุมวลรวม CBR 25%":                                   (0.10, 1.0,  21_750),
+    "วัสดุคัดเลือก ก":                                       (0.08, 1.0,  14_504),
+    "ดินถมคันทาง CBR กรอกเอง":                               (0.08, 1.0,    None),  # Mr คำนวณจาก CBR
+}
+
+# ชื่อเดิม alias → ใช้ใน JSON Load เก่า
+_FLEX_MAT_ALIAS = {
+    "ดินถมคันทาง CBR 10%": "ดินถมคันทาง CBR กรอกเอง",
 }
 
 RIGID_LAYER_MATERIALS = {
@@ -1513,45 +1520,43 @@ with tab2:
 # ─────────────────────────────────────────────
 #  AASHTO 1993 D_min HELPER
 # ─────────────────────────────────────────────
-def _aashto_badge(sn_req, cum_sn_before, ai, mi, h_cm):
+def _aashto_badge(esal, zr, so, pi, pt, mr_psi_layer, cum_sn_before, ai, mi, h_cm):
     """
-    คำนวณ D_min ตาม AASHTO 1993:
-        Di_min = SNi_remaining / (ai × mi)   [inch → cm]
-    โดย SNi_remaining = SN_required - ΣSN ชั้นบน
-
-    Returns: HTML badge string
+    คำนวณ D_min ตาม AASHTO 1993 แต่ละชั้น:
+        SN_req_i  = aashto_sn_required(ESAL, ZR, So, Pi, Pt, Mr_i)
+        D_min_i   = (SN_req_i − ΣSN_prev) / (ai × mi)  [in → cm]
     """
-    if sn_req <= 0 or ai <= 0:
+    if ai is None or ai <= 0 or mr_psi_layer is None or mr_psi_layer <= 0:
         return ""
-    sn_remaining = sn_req - cum_sn_before          # SN ที่ชั้นนี้ต้องรับ
+    try:
+        sn_req_i = aashto_sn_required(esal, zr, so, pi, pt, mr_psi_layer) or 0.0
+    except:
+        return ""
+    if sn_req_i <= 0:
+        return ""
+
+    sn_remaining = sn_req_i - cum_sn_before
     if sn_remaining <= 0:
-        # ชั้นบนๆ รับครบแล้ว — ชั้นนี้ไม่จำเป็น
-        d_min_cm = 0.0
-    else:
-        d_min_in = sn_remaining / (ai * mi)
-        d_min_cm = d_min_in * 2.54
+        return ('<div style="font-size:0.78rem;font-weight:600;'
+                'background:#E8F5E9;border-radius:5px;padding:0.2rem 0.5rem;'
+                'margin-top:0.25rem;border:1px solid #A5D6A7;color:#1B5E20;">'
+                '✅ ผ่าน — ชั้นบนรับ SN ครบแล้ว</div>')
 
-    passed = h_cm >= d_min_cm - 0.05              # tolerance 0.05 cm
+    d_min_in = sn_remaining / (ai * mi)
+    d_min_cm = d_min_in * 2.54
+    passed   = h_cm >= d_min_cm - 0.05
 
-    if d_min_cm <= 0:
-        return ('<div style="font-size:0.78rem;color:#2E7D32;font-weight:600;'
-                'margin-top:0.25rem;">✅ ผ่าน — ชั้นบนรับ SN ครบแล้ว</div>')
-    elif passed:
-        return (f'<div style="font-size:0.78rem;color:#2E7D32;font-weight:600;'
+    if passed:
+        return (f'<div style="font-size:0.78rem;font-weight:600;'
                 f'background:#E8F5E9;border-radius:5px;padding:0.2rem 0.5rem;'
-                f'margin-top:0.25rem;border:1px solid #A5D6A7;">'
-                f'✅ ผ่าน &nbsp;—&nbsp; D<sub>min</sub> = '
-                f'<b>{d_min_cm:.1f} cm</b> '
-                f'({d_min_in:.2f} in) &nbsp;|&nbsp; '
-                f'SN<sub>i</sub> ต้องการ = {sn_remaining:.3f}</div>')
+                f'margin-top:0.25rem;border:1px solid #A5D6A7;color:#1B5E20;">'
+                f'✅ ผ่าน &nbsp;(D<sub>min</sub> = {d_min_cm:.1f} ซม.)</div>')
     else:
-        return (f'<div style="font-size:0.78rem;color:#B71C1C;font-weight:600;'
+        return (f'<div style="font-size:0.78rem;font-weight:600;'
                 f'background:#FFF8E1;border-radius:5px;padding:0.2rem 0.5rem;'
-                f'margin-top:0.25rem;border:1px solid #FFE082;">'
-                f'💡 D<sub>min</sub> = <b>{d_min_cm:.1f} cm</b> '
-                f'({d_min_in:.2f} in) &nbsp;|&nbsp; '
-                f'SN<sub>i</sub> ต้องการ = {sn_remaining:.3f} &nbsp;'
-                f'<span style="color:#E65100;">(กรอกอยู่ {h_cm} cm)</span></div>')
+                f'margin-top:0.25rem;border:1px solid #FFE082;color:#E65100;">'
+                f'💡 ต้องการ D<sub>min</sub> = {d_min_cm:.1f} ซม. '
+                f'&nbsp;(กรอกอยู่ {h_cm} ซม.)</div>')
 
 # ─────────────────────────────────────────────
 #  CBR ↔ Mr SYNC CALLBACKS
@@ -1654,18 +1659,16 @@ with tab3:
         cum_sn        = 0.0
         cum_sn_provided = 0.0   # ΣSN เฉพาะชั้นที่มี h>0 สำหรับ D_min badge
 
-        # ── คำนวณ SN Required ล่วงหน้าสำหรับ Smart Recommendation ──
-        _zr_fl   = ZR_MAP.get(ss.get('r0_fl', 90), -1.282)
-        _so_fl   = ss.get('so_fl', 0.45)
-        _pi_fl   = ss.get('pi_fl', 4.2)
-        _pt_fl2  = ss.get('pt_fl2', float(ss.get('pt_global', 2.5)))
-        _mr_fl   = float(ss.get('mr_fl_val', 4500.0))
-        _esal_f  = ss.get('esal_flex', {})
-        _esal_f_val = list(_esal_f.values())[ss.get('flex_sn_sel', 0)] if _esal_f else ss.get('flex_esal_manual', 0)
-        try:
-            _sn_req = aashto_sn_required(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, _mr_fl) or 0.0
-        except:
-            _sn_req = 0.0
+        # ── พารามิเตอร์สำหรับ _aashto_badge คำนวณ D_min แต่ละชั้น ──
+        _zr_fl      = ZR_MAP.get(ss.get('r0_fl', 90), -1.282)
+        _so_fl      = ss.get('so_fl', 0.45)
+        _pi_fl      = ss.get('pi_fl', 4.2)
+        _pt_fl2     = ss.get('pt_fl2_override', float(ss.get('pt_global', 2.5))) \
+                      if not ss.get('use_pt_global_fl', True) \
+                      else float(ss.get('pt_global', 2.5))
+        _esal_f     = ss.get('esal_flex', {})
+        _esal_f_val = list(_esal_f.values())[ss.get('flex_sn_sel', 0)] \
+                      if _esal_f else float(ss.get('flex_esal_manual', 0))
 
         for li in range(6):
             lc0, lc1, lc2, lc3 = st.columns([3, 1, 1, 4])
@@ -1718,7 +1721,18 @@ with tab3:
                     st.markdown("")
             with lc3:
                 if mat_f != "ไม่เลือก" and h_f > 0:
-                    ai, _ = FLEX_LAYER_MATERIALS[mat_f]
+                    ai, _, mr_psi_layer = FLEX_LAYER_MATERIALS[mat_f]
+
+                    # ── ดินถมคันทาง: กรอก CBR → คำนวณ Mr ──
+                    if mat_f == "ดินถมคันทาง CBR กรอกเอง":
+                        cbr_sub = st.number_input(
+                            "CBR ดินถม (%)", value=10.0, step=1.0,
+                            min_value=2.0, max_value=30.0,
+                            key=f"fcbr_sub_{li}",
+                            help="Mr = CBR × 10 MPa × 145.038 psi/MPa"
+                        )
+                        mr_psi_layer = cbr_sub * 10.0 * 145.038
+                        st.caption(f"Mr = {mr_psi_layer:,.0f} psi ({cbr_sub*10:.0f} MPa)")
                     # AC sub-layers
                     if mat_f in AC_SURFACE_MATERIALS:
                         do_sub = st.checkbox(
@@ -1782,7 +1796,7 @@ with tab3:
                                 unsafe_allow_html=True
                             )
                             # ── #4 Smart Recommendation (AASHTO D_min) ──
-                            _badge = _aashto_badge(_sn_req, _cum_sn_before, ai, mi_f, h_total)
+                            _badge = _aashto_badge(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, mr_psi_layer, _cum_sn_before, ai, mi_f, h_total)
                             if _badge:
                                 st.markdown(_badge, unsafe_allow_html=True)
                         else:
@@ -1806,7 +1820,7 @@ with tab3:
                                 unsafe_allow_html=True
                             )
                             # ── #4 Smart Recommendation (AASHTO D_min) ──
-                            _badge = _aashto_badge(_sn_req, _cum_sn_before, ai, mi_f, h_f)
+                            _badge = _aashto_badge(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, mr_psi_layer, _cum_sn_before, ai, mi_f, h_f)
                             if _badge:
                                 st.markdown(_badge, unsafe_allow_html=True)
                     else:
@@ -1830,7 +1844,7 @@ with tab3:
                             unsafe_allow_html=True
                         )
                         # ── #4 Smart Recommendation (AASHTO D_min) ──
-                        _badge = _aashto_badge(_sn_req, _cum_sn_before, ai, mi_f, h_f)
+                        _badge = _aashto_badge(_esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2, mr_psi_layer, _cum_sn_before, ai, mi_f, h_f)
                         if _badge:
                             st.markdown(_badge, unsafe_allow_html=True)
                 else:
