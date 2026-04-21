@@ -1630,7 +1630,7 @@ with tab3:
         st.markdown('<div class="card"><h4>⚙️ Design Parameters</h4>', unsafe_allow_html=True)
         c1,c2,c3,c4 = st.columns(4)
         with c1:
-            r0_fl = st.selectbox("Reliability R0 (%)", list(ZR_MAP.keys()), index=10, key="r0_fl")
+            r0_fl = st.selectbox("Reliability R0 (%)", list(ZR_MAP.keys()), index=6, key="r0_fl")
             st.caption(f"ZR = {ZR_MAP[r0_fl]}")
         with c2: so_fl = st.number_input("So", value=0.45, step=0.01, min_value=0.3, max_value=0.6, key="so_fl")
         with c3: pi_fl = st.number_input("Pi", value=4.2, step=0.1, key="pi_fl")
@@ -2250,7 +2250,7 @@ with tab4:
                                   min_value=100, max_value=700, key="sc_inp")
     with rp3:
         r0_rig = st.selectbox("Reliability R0 (%)", list(ZR_MAP.keys()),
-                               index=10, key="r0_rig")
+                               index=6, key="r0_rig")
         zr_rig = ZR_MAP[r0_rig]
     with rp4:
         so_rig = st.number_input("So", value=0.35, step=0.01,
