@@ -1511,6 +1511,49 @@ with tab2:
             st.markdown('</div>', unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
+#  AASHTO 1993 D_min HELPER
+# ─────────────────────────────────────────────
+def _aashto_badge(sn_req, cum_sn_before, ai, mi, h_cm):
+    """
+    คำนวณ D_min ตาม AASHTO 1993:
+        Di_min = SNi_remaining / (ai × mi)   [inch → cm]
+    โดย SNi_remaining = SN_required - ΣSN ชั้นบน
+
+    Returns: HTML badge string
+    """
+    if sn_req <= 0 or ai <= 0:
+        return ""
+    sn_remaining = sn_req - cum_sn_before          # SN ที่ชั้นนี้ต้องรับ
+    if sn_remaining <= 0:
+        # ชั้นบนๆ รับครบแล้ว — ชั้นนี้ไม่จำเป็น
+        d_min_cm = 0.0
+    else:
+        d_min_in = sn_remaining / (ai * mi)
+        d_min_cm = d_min_in * 2.54
+
+    passed = h_cm >= d_min_cm - 0.05              # tolerance 0.05 cm
+
+    if d_min_cm <= 0:
+        return ('<div style="font-size:0.78rem;color:#2E7D32;font-weight:600;'
+                'margin-top:0.25rem;">✅ ผ่าน — ชั้นบนรับ SN ครบแล้ว</div>')
+    elif passed:
+        return (f'<div style="font-size:0.78rem;color:#2E7D32;font-weight:600;'
+                f'background:#E8F5E9;border-radius:5px;padding:0.2rem 0.5rem;'
+                f'margin-top:0.25rem;border:1px solid #A5D6A7;">'
+                f'✅ ผ่าน &nbsp;—&nbsp; D<sub>min</sub> = '
+                f'<b>{d_min_cm:.1f} cm</b> '
+                f'({d_min_in:.2f} in) &nbsp;|&nbsp; '
+                f'SN<sub>i</sub> ต้องการ = {sn_remaining:.3f}</div>')
+    else:
+        return (f'<div style="font-size:0.78rem;color:#B71C1C;font-weight:600;'
+                f'background:#FFF8E1;border-radius:5px;padding:0.2rem 0.5rem;'
+                f'margin-top:0.25rem;border:1px solid #FFE082;">'
+                f'💡 D<sub>min</sub> = <b>{d_min_cm:.1f} cm</b> '
+                f'({d_min_in:.2f} in) &nbsp;|&nbsp; '
+                f'SN<sub>i</sub> ต้องการ = {sn_remaining:.3f} &nbsp;'
+                f'<span style="color:#E65100;">(กรอกอยู่ {h_cm} cm)</span></div>')
+
+# ─────────────────────────────────────────────
 #  CBR ↔ Mr SYNC CALLBACKS
 # ─────────────────────────────────────────────
 def _on_cbr_fl_change():
@@ -1719,6 +1762,7 @@ with tab3:
                             h_total = h_wear + h_bind + h_base
                             h_in_total = h_total / 2.54
                             sn_i = ai * h_in_total * mi_f
+                            _cum_sn_before = cum_sn          # บันทึก ΣSN ก่อนบวกชั้นนี้
                             cum_sn += sn_i
                             layer_results.append({
                                 'layer': li+1, 'material': mat_f,
@@ -1735,17 +1779,14 @@ with tab3:
                                 f'</div>',
                                 unsafe_allow_html=True
                             )
-                            # ── #4 Smart Recommendation ──
-                            if _sn_req > 0:
-                                _sn_gap = _sn_req - cum_sn
-                                if _sn_gap <= 0:
-                                    st.markdown('<div style="font-size:0.78rem;color:#2E7D32;margin-top:0.2rem;">✅ SN เพียงพอแล้ว</div>', unsafe_allow_html=True)
-                                elif ai and ai > 0:
-                                    _h_rec = (_sn_gap / (ai * mi_f)) * 2.54
-                                    st.markdown(f'<div style="font-size:0.78rem;color:#E65100;margin-top:0.2rem;">💡 แนะนำเพิ่มอีก ≥ <b>{_h_rec:.1f} cm</b> เพื่อให้ SN รวมครบ</div>', unsafe_allow_html=True)
+                            # ── #4 Smart Recommendation (AASHTO D_min) ──
+                            _badge = _aashto_badge(_sn_req, _cum_sn_before, ai, mi_f, h_total)
+                            if _badge:
+                                st.markdown(_badge, unsafe_allow_html=True)
                         else:
                             h_in = h_f / 2.54
                             sn_i = ai * h_in * mi_f
+                            _cum_sn_before = cum_sn
                             cum_sn += sn_i
                             layer_results.append({
                                 'layer': li+1, 'material': mat_f,
@@ -1761,17 +1802,14 @@ with tab3:
                                 f'</div>',
                                 unsafe_allow_html=True
                             )
-                            # ── #4 Smart Recommendation ──
-                            if _sn_req > 0:
-                                _sn_gap = _sn_req - cum_sn
-                                if _sn_gap <= 0:
-                                    st.markdown('<div style="font-size:0.78rem;color:#2E7D32;margin-top:0.2rem;">✅ SN เพียงพอแล้ว</div>', unsafe_allow_html=True)
-                                elif ai and ai > 0:
-                                    _h_rec = (_sn_gap / (ai * mi_f)) * 2.54
-                                    st.markdown(f'<div style="font-size:0.78rem;color:#E65100;margin-top:0.2rem;">💡 แนะนำเพิ่มอีก ≥ <b>{_h_rec:.1f} cm</b> เพื่อให้ SN รวมครบ</div>', unsafe_allow_html=True)
+                            # ── #4 Smart Recommendation (AASHTO D_min) ──
+                            _badge = _aashto_badge(_sn_req, _cum_sn_before, ai, mi_f, h_f)
+                            if _badge:
+                                st.markdown(_badge, unsafe_allow_html=True)
                     else:
                         h_in = h_f / 2.54
                         sn_i = ai * h_in * mi_f
+                        _cum_sn_before = cum_sn
                         cum_sn += sn_i
                         layer_results.append({
                             'layer': li+1, 'material': mat_f,
@@ -1787,14 +1825,10 @@ with tab3:
                             f'</div>',
                             unsafe_allow_html=True
                         )
-                        # ── #4 Smart Recommendation ──
-                        if _sn_req > 0:
-                            _sn_gap = _sn_req - cum_sn
-                            if _sn_gap <= 0:
-                                st.markdown('<div style="font-size:0.78rem;color:#2E7D32;margin-top:0.2rem;">✅ SN เพียงพอแล้ว</div>', unsafe_allow_html=True)
-                            elif ai and ai > 0:
-                                _h_rec = (_sn_gap / (ai * mi_f)) * 2.54
-                                st.markdown(f'<div style="font-size:0.78rem;color:#E65100;margin-top:0.2rem;">💡 แนะนำเพิ่มอีก ≥ <b>{_h_rec:.1f} cm</b> เพื่อให้ SN รวมครบ</div>', unsafe_allow_html=True)
+                        # ── #4 Smart Recommendation (AASHTO D_min) ──
+                        _badge = _aashto_badge(_sn_req, _cum_sn_before, ai, mi_f, h_f)
+                        if _badge:
+                            st.markdown(_badge, unsafe_allow_html=True)
                 else:
                     st.markdown("")
 
