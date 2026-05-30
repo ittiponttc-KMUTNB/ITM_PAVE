@@ -67,6 +67,9 @@ def render():
     with sub_flex:
         _render_esal_flex(ss)
 
+    # ── Export ──
+    render_export()
+
 
 # ─────────────────────────────────────────────
 #  Traffic Input
@@ -309,3 +312,33 @@ def _render_esal_flex(ss):
             "ESAL": [f"{v:,.0f}" for v in ss.esal_flex.values()],
         })
         st.dataframe(df_ef, use_container_width=True, hide_index=True)
+
+
+def render_export():
+    """ปุ่ม Export ESAL Report — เรียกจาก render() หลัง sub-tabs"""
+    import streamlit as st
+    ss = st.session_state
+    if not (ss.get('esal_flex') or ss.get('esal_rigid')):
+        return
+    st.markdown("---")
+    st.markdown("#### 📄 Export ESAL Report")
+    col_l, col_r = st.columns([2, 1])
+    with col_l:
+        st.markdown(
+            '<div class="result-info">'
+            '📋 Report จะมี: หัวข้อ · บทเกริ่นนำ · สมการ AASHTO 1993 · '
+            'ตารางพารามิเตอร์ · Truck Factor · ปริมาณจราจรรายปี · ESAL + ACC.ESAL'
+            '</div>',
+            unsafe_allow_html=True)
+    with col_r:
+        try:
+            from engine.report_esal import build_esal_report
+            b = build_esal_report(dict(ss))
+            if b:
+                st.download_button(
+                    "📥 Download ESAL Report (.docx)", b,
+                    file_name=f"ESAL_Report_{ss.get('project_name','')}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True, key="dl_esal_report")
+        except Exception as e:
+            st.error(f"❌ {e}")
