@@ -143,10 +143,8 @@ def render():
             f"Sc = **{sc_inp} psi**"
         )
 
-    # save params ที่ใช้ร่วมกัน
-    ss['r0_rig'] = r0_rig
-    ss['so_rig'] = so_rig
-    ss['pi_rig'] = pi_rig
+    # หมายเหตุ: r0_rig, so_rig, pi_rig ถูก manage โดย Streamlit ผ่าน key= แล้ว
+    # zr_rig เป็น derived value ไม่ใช่ widget จึง save ได้
     ss['zr_rig'] = zr_rig
 
     st.markdown("---")
