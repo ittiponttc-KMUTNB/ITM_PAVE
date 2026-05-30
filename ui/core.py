@@ -245,12 +245,10 @@ def render_sidebar():
         </div>
         """, unsafe_allow_html=True)
 
-        # Project name
-        project = st.text_input("📁 ชื่อโครงการ",
-                                 value=ss.get('project_name', ''),
-                                 key="project_name",
-                                 placeholder="กรอกชื่อโครงการ...")
-        ss['project_name'] = project
+        # Project name — ใช้ key= เพียงอย่างเดียว Streamlit จัดการ state เอง
+        st.text_input("📁 ชื่อโครงการ",
+                      key="project_name",
+                      placeholder="กรอกชื่อโครงการ...")
 
         st.divider()
 
