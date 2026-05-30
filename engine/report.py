@@ -19,7 +19,7 @@ from docx.oxml import OxmlElement
 
 from constants import SLAB_THICKNESSES, SLAB_LABELS
 from engine.design import calc_percentile_cbr, aashto_rigid_w18
-from engine.figures import draw_pavement_structure, fig_to_bytes
+# figures imported lazily inside functions (avoid matplotlib load at startup)
 
 # ─────────────────────────────────────────────
 #  สี
@@ -407,11 +407,12 @@ def build_report_flexible(ss: dict) -> bytes | None:
                        "ai":  l.get("ai",  None),
                        "sni": l.get("sni", None)}
                       for l in layers]
+        from engine.figures import draw_pavement_structure, fig_to_bytes
+        import matplotlib.pyplot as plt
         fig = draw_pavement_structure(fig_layers, mode="flex",
                                       cbr_subgrade=float(cbr or 3.0))
         if fig:
             img_bytes = fig_to_bytes(fig)
-            import matplotlib.pyplot as plt
             plt.close(fig)
             _add_figure(doc, img_bytes,
                         caption="รูปที่ 3-1  โครงสร้างชั้นทางลาดยางที่ออกแบบ")
@@ -622,6 +623,8 @@ def build_report_rigid(ss: dict) -> bytes | None:
                            "thickness_cm": l.get("thickness_cm", 0),
                            "E_MPa": l.get("E_MPa", 0)}
                           for l in layers]
+            from engine.figures import draw_pavement_structure, fig_to_bytes
+            import matplotlib.pyplot as plt
             fig = draw_pavement_structure(
                 fig_layers, mode="rigid",
                 cbr_subgrade=float(ss.get('cbr_design') or 3.0),
