@@ -17,3 +17,10 @@ from engine.design import (
     mr_to_k,
     calc_percentile_cbr,
 )
+
+from engine.figures import (
+    draw_pavement_structure,
+    draw_k_infinity_nomograph,
+    draw_loss_of_support_nomograph,
+    fig_to_bytes,
+)
