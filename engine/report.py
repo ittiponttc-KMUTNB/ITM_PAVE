@@ -492,10 +492,10 @@ def build_report_rigid(ss: dict) -> bytes | None:
         passed  = res.get('pass', False)
         layers  = res.get('layers', [])
         e_eq    = res.get('e_eq_psi', 0)
-        r0      = ss.get('r0_rig', 90)
-        so      = ss.get('so_rig', 0.35)
-        pi      = ss.get('pi_rig', 4.5)
-        pt      = ss.get('pt_global', 2.5)
+        r0      = ss.get('r0_rig', 90)  or 90
+        so      = float(ss.get('so_rig') or 0.35)
+        pi      = float(ss.get('pi_rig') or 4.5)
+        pt      = float(ss.get('pt_global') or ss.get('pt_rig_v7') or 2.5)
         fc_cyl  = 0.8 * fc
         fc_psi  = fc_cyl * 14.223
         ec_psi  = 57000 * math.sqrt(fc_psi)
