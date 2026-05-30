@@ -183,16 +183,24 @@ def render():
 
 def _render_nomograph(ss):
     """
-    Nomograph Section — ใช้ engine.figures plot อัตโนมัติ
-    ไม่ต้อง upload รูป — คำนวณและ plot จาก ESB, DSB, k_subgrade
+    Nomograph Section — ใช้ engine.rigid_nomograph (V7)
+    คำนวณจาก coordinate data จริงของ AASHTO nomograph
     """
+    from engine.rigid_nomograph import (
+        calc_composite_k, apply_loss_of_support,
+        plot_f33, plot_f34,
+        fig_to_bytes as rn_fig_to_bytes,
+        calc_odemark,
+    )
+    import matplotlib.pyplot as plt
+
     sub_kinf, sub_ls = st.tabs(["📊 Composite k∞ (Fig.3.3)", "📉 Loss of Support (Fig.3.4)"])
 
+    # ── Sub-tab 1: k∞ ──
     with sub_kinf:
-        st.markdown('<div class="result-info">'
-                    '💡 ค่า ESB และ DSB คำนวณอัตโนมัติจาก Layer Editor (Section C) '
-                    '— ปรับแก้ได้ด้านล่าง</div>',
-                    unsafe_allow_html=True)
+        st.markdown(
+            '<div class="result-info">💡 ESB และ DSB คำนวณอัตโนมัติจาก Layer Editor — ปรับแก้ได้</div>',
+            unsafe_allow_html=True)
 
         col_ctrl, col_fig = st.columns([1, 2])
         with col_ctrl:
@@ -200,60 +208,55 @@ def _render_nomograph(ss):
                 # auto-fill จาก Layer Editor
                 esb_auto = int(ss.get('layer_esb_psi', 50000))
                 dsb_auto = float(ss.get('layer_dsb_in', 6.0))
-                mr_auto  = int(ss.mr_subgrade_psi) if ss.mr_subgrade_psi else 7000
-                k_sub    = float(ss.k_subgrade_pci) if ss.k_subgrade_pci else mr_auto / 19.4
+                mr_val   = float(ss.mr_subgrade_psi or 7000)
+                k_sub    = float(ss.k_subgrade_pci or mr_val / 19.4)
 
                 if esb_auto > 0:
                     st.markdown(
-                        f'<div class="badge-ready" style="font-size:11px;margin-bottom:4px">ESB จาก Layer Editor = {esb_auto:,} psi</div>',
+                        f'<div class="badge-ready" style="font-size:11px;margin-bottom:3px">ESB = {esb_auto:,} psi (จาก Layer Editor)</div>',
                         unsafe_allow_html=True)
                 if dsb_auto > 0:
                     st.markdown(
-                        f'<div class="badge-ready" style="font-size:11px;margin-bottom:4px">DSB จาก Layer Editor = {dsb_auto:.1f} in</div>',
+                        f'<div class="badge-ready" style="font-size:11px;margin-bottom:6px">DSB = {dsb_auto:.1f} in (จาก Layer Editor)</div>',
                         unsafe_allow_html=True)
 
-                esb_val = st.number_input("ESB (psi)", value=esb_auto,
-                                           step=1000, min_value=1000, key="nomo_esb")
-                dsb_val = st.number_input("DSB (inches)", value=dsb_auto,
-                                           step=0.5, min_value=0.0, key="nomo_dsb")
-                k_sub_val = st.number_input("k subgrade (pci)",
-                                             value=float(round(k_sub)),
-                                             step=10.0, min_value=10.0, key="nomo_ksub")
+                mr_inp  = st.number_input("MR subgrade (psi)",
+                                           value=int(mr_val), step=500,
+                                           min_value=1000, max_value=20000,
+                                           key="nomo_mr")
+                esb_inp = st.number_input("ESB (psi)",
+                                           value=max(15000, esb_auto),
+                                           step=5000, min_value=15000,
+                                           max_value=1000000, key="nomo_esb")
+                dsb_inp = st.number_input("DSB (inches)",
+                                           value=max(6.0, min(20.0, dsb_auto)),
+                                           step=1.0, min_value=6.0, max_value=20.0,
+                                           key="nomo_dsb")
 
-                if st.button("📊 Plot Nomograph k∞", type="primary",
+                if st.button("📊 คำนวณและ Plot k∞", type="primary",
                               key="plot_kinf", use_container_width=True):
-                    ss['nomo_esb_val']  = esb_val
-                    ss['nomo_dsb_val']  = dsb_val
-                    ss['nomo_ksub_val'] = k_sub_val
-                    ss['nomo_plot_k']   = True
+                    res = calc_composite_k(mr_inp, esb_inp, dsb_inp)
+                    k_inf_calc = res['k_inf_pci']
+                    ss.k_inf = k_inf_calc
+                    fig33 = plot_f33(mr_inp, esb_inp, dsb_inp, res)
+                    ss['nomograph_img_k'] = rn_fig_to_bytes(fig33)
+                    ss['_fig33_res'] = res
+                    ss['_fig33_params'] = (mr_inp, esb_inp, dsb_inp)
+                    plt.close(fig33)
+                    st.success(f"✅ k∞ = {k_inf_calc:.0f} pci")
 
         with col_fig:
-            if ss.get('nomo_plot_k') or ss.get('k_inf'):
-                try:
-                    from engine.figures import draw_k_infinity_nomograph, fig_to_bytes
-                    import matplotlib.pyplot as plt
-
-                    esb_use  = ss.get('nomo_esb_val',  esb_auto)
-                    dsb_use  = ss.get('nomo_dsb_val',  dsb_auto)
-                    ksub_use = ss.get('nomo_ksub_val', k_sub)
-
-                    fig, k_inf_calc = draw_k_infinity_nomograph(esb_use, dsb_use, ksub_use)
-                    st.pyplot(fig, use_container_width=True)
-
-                    # auto-save k∞
-                    ss.k_inf               = k_inf_calc
-                    ss['nomograph_img_k'] = fig_to_bytes(fig)
-                    plt.close(fig)
-
-                    st.markdown(
-                        f'<div class="result-pass">✅ k∞ = <b>{k_inf_calc:.0f} pci</b> บันทึกแล้ว</div>',
-                        unsafe_allow_html=True)
-                except Exception as e:
-                    st.error(f"❌ ไม่สามารถ plot ได้: {e}")
+            if ss.get('nomograph_img_k'):
+                st.image(ss['nomograph_img_k'],
+                         caption=f"Fig.3.3 — k∞ = {ss.k_inf:.0f} pci" if ss.k_inf else "Fig.3.3",
+                         use_container_width=True)
+            elif ss.get('k_inf'):
+                st.markdown(
+                    f'<div class="result-pass">k∞ = <b>{ss.k_inf:.0f} pci</b></div>',
+                    unsafe_allow_html=True)
             else:
-                st.info("⬅️ กรอกค่าแล้วกด Plot Nomograph k∞")
+                st.info("⬅️ กรอกค่าแล้วกด คำนวณและ Plot k∞")
 
-        # manual override
         with st.container(border=True):
             k_inf_manual = st.number_input(
                 "หรือกรอก k∞ โดยตรง (pci)",
@@ -263,50 +266,40 @@ def _render_nomograph(ss):
                 ss.k_inf = k_inf_manual
                 st.success(f"✅ k∞ = {k_inf_manual:.0f} pci")
 
+    # ── Sub-tab 2: Loss of Support ──
     with sub_ls:
         col_ctrl2, col_fig2 = st.columns([1, 2])
         with col_ctrl2:
             with st.container(border=True):
+                k_inf_now = float(ss.k_inf or 200.0)
+                st.markdown(
+                    f'<div class="badge-ready" style="font-size:11px;margin-bottom:6px">k∞ = {k_inf_now:.0f} pci</div>',
+                    unsafe_allow_html=True)
+
                 ls_opts = [0.0, 0.5, 1.0, 1.5, 2.0, 3.0]
                 ls_sel  = st.select_slider(
                     "Loss of Support (LS)", ls_opts,
                     value=ss.ls_value if ss.ls_value in ls_opts else 1.0,
                     key="ls_sel")
 
-                k_inf_now = float(ss.k_inf or 200.0)
-                st.markdown(
-                    f'<div class="badge-ready" style="font-size:11px;margin-bottom:4px">k∞ ปัจจุบัน = {k_inf_now:.0f} pci</div>',
-                    unsafe_allow_html=True)
-
-                if st.button("📊 Plot Nomograph LS", type="primary",
+                if st.button("📊 คำนวณและ Plot k_eff", type="primary",
                               key="plot_ls", use_container_width=True):
-                    ss['nomo_ls_val']  = ls_sel
-                    ss['nomo_plot_ls'] = True
+                    k_eff_calc = apply_loss_of_support(k_inf_now, ls_sel)
+                    ss.k_corrected = k_eff_calc
+                    ss.ls_value    = ls_sel
+                    fig34 = plot_f34(k_inf_now, ls_sel, k_eff_calc)
+                    ss['nomograph_img_ls'] = rn_fig_to_bytes(fig34)
+                    plt.close(fig34)
+                    st.success(f"✅ k_eff = {k_eff_calc:.0f} pci")
 
         with col_fig2:
-            if ss.get('nomo_plot_ls') or ss.get('k_corrected'):
-                try:
-                    from engine.figures import draw_loss_of_support_nomograph, fig_to_bytes
-                    import matplotlib.pyplot as plt
-
-                    ls_use = ss.get('nomo_ls_val', ls_sel)
-                    fig, k_eff_calc = draw_loss_of_support_nomograph(k_inf_now, ls_use)
-                    st.pyplot(fig, use_container_width=True)
-
-                    ss.k_corrected          = k_eff_calc
-                    ss.ls_value             = ls_use
-                    ss['nomograph_img_ls'] = fig_to_bytes(fig)
-                    plt.close(fig)
-
-                    st.markdown(
-                        f'<div class="result-pass">✅ k_eff = <b>{k_eff_calc:.0f} pci</b> (LS={ls_use}) บันทึกแล้ว</div>',
-                        unsafe_allow_html=True)
-                except Exception as e:
-                    st.error(f"❌ ไม่สามารถ plot ได้: {e}")
+            if ss.get('nomograph_img_ls'):
+                st.image(ss['nomograph_img_ls'],
+                         caption=f"Fig.3.4 — k_eff = {ss.k_corrected:.0f} pci" if ss.k_corrected else "Fig.3.4",
+                         use_container_width=True)
             else:
-                st.info("⬅️ กด Plot Nomograph LS")
+                st.info("⬅️ กด คำนวณและ Plot k_eff")
 
-        # manual override
         with st.container(border=True):
             k_eff_man = st.number_input(
                 "หรือกรอก k_eff โดยตรง (pci)",
