@@ -315,30 +315,63 @@ def _render_esal_flex(ss):
 
 
 def render_export():
-    """ปุ่ม Export ESAL Report — เรียกจาก render() หลัง sub-tabs"""
+    """ปุ่ม Export ESAL Report — แสดงเสมอหลัง sub-tabs"""
     import streamlit as st
     ss = st.session_state
-    if not (ss.get('esal_flex') or ss.get('esal_rigid')):
-        return
+
     st.markdown("---")
     st.markdown("#### 📄 Export ESAL Report")
-    col_l, col_r = st.columns([2, 1])
-    with col_l:
+
+    has_data = bool(ss.get('esal_flex') or ss.get('esal_rigid'))
+
+    if not has_data:
         st.markdown(
-            '<div class="result-info">'
-            '📋 Report จะมี: หัวข้อ · บทเกริ่นนำ · สมการ AASHTO 1993 · '
-            'ตารางพารามิเตอร์ · Truck Factor · ปริมาณจราจรรายปี · ESAL + ACC.ESAL'
-            '</div>',
+            '<div class="result-warn">⚠️ คำนวณ ESAL ก่อนแล้วจึง Export ได้ครับ</div>',
             unsafe_allow_html=True)
-    with col_r:
+        return
+
+    st.markdown(
+        '<div class="result-info">' +
+        '📋 Report: หัวข้อ · บทเกริ่นนำ · สมการ · Truck Factor · ปริมาณจราจรรายปี · ESAL + ACC.ESAL'
+        '</div>',
+        unsafe_allow_html=True)
+
+    # Section number settings
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        flex_sec = st.text_input("หัวข้อ Flexible", value="4.2.2", key="esal_flex_sec")
+    with c2:
+        flex_tbl = st.text_input("ตารางเริ่มต้น Flexible", value="4-1", key="esal_flex_tbl")
+    with c3:
+        rigid_sec = st.text_input("หัวข้อ Rigid", value="4.2.3", key="esal_rigid_sec")
+    with c4:
+        rigid_tbl = st.text_input("ตารางเริ่มต้น Rigid", value="4-4", key="esal_rigid_tbl")
+
+    if st.button("📄 สร้าง ESAL Report", type="primary",
+                  use_container_width=True, key="btn_esal_report"):
         try:
             from engine.report_esal import build_esal_report
-            b = build_esal_report(dict(ss))
+            ss_dict = dict(ss)
+            ss_dict['report_settings'] = {
+                'flex_section_number':  flex_sec,
+                'flex_table_start':     flex_tbl,
+                'rigid_section_number': rigid_sec,
+                'rigid_table_start':    rigid_tbl,
+            }
+            b = build_esal_report(ss_dict)
             if b:
-                st.download_button(
-                    "📥 Download ESAL Report (.docx)", b,
-                    file_name=f"ESAL_Report_{ss.get('project_name','')}.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    use_container_width=True, key="dl_esal_report")
+                st.session_state['_esal_report_bytes'] = b
+                st.success("✅ สร้าง Report สำเร็จ — กด Download ด้านล่าง")
+            else:
+                st.error("❌ ไม่สามารถสร้าง Report ได้ — ตรวจสอบข้อมูลจราจรและ ESAL")
         except Exception as e:
             st.error(f"❌ {e}")
+
+    if ss.get('_esal_report_bytes'):
+        proj = ss.get('project_name', '') or 'Report'
+        st.download_button(
+            "📥 Download ESAL Report (.docx)",
+            ss['_esal_report_bytes'],
+            file_name=f"ESAL_Report_{proj}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True, key="dl_esal_report")
