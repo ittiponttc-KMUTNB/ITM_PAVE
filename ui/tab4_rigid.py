@@ -714,7 +714,7 @@ def render():
             with ptc2:
                 st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
                 st.markdown(
-                    _badge('ΔPSI', f'{dpsi:.2f}', '', bg='#EEF2F7', color='#546E7A'),
+                    _badge('ΔPSI = 4.5−Pt', f'{dpsi:.2f}', '', bg='#EEF2F7', color='#546E7A'),
                     unsafe_allow_html=True
                 )
         with p3d4:
