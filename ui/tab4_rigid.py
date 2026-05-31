@@ -498,31 +498,6 @@ def render():
     _cbr3 = float(_ode.get('cbr_eq_design', _ode.get('cbr_eq', 0))) if (
                 ss.get('improve_soil_check') and _ode) else None
 
-    if _cbr1 or _cbr2 or _cbr3:
-        with st.container(border=True):
-            st.markdown('<div style="font-size:0.85rem;font-weight:700;color:#0B1F3A;'
-                        'margin-bottom:6px">📌 ค่าอ้างอิง CBR จาก TAB CBR Analysis:</div>',
-                        unsafe_allow_html=True)
-            ref_html = ''
-            if _cbr1:
-                ref_html += (f'<span style="background:#E3F2FD;color:#0D47A1;border-radius:6px;'
-                             f'padding:3px 8px;font-size:0.82rem;margin-right:6px;font-weight:600">'
-                             f'① ดินเดิม P90 = {_cbr1:.2f}%</span>')
-            if _cbr2:
-                ref_html += (f'<span style="background:#FFF8E1;color:#E65100;border-radius:6px;'
-                             f'padding:3px 8px;font-size:0.82rem;margin-right:6px;font-weight:600">'
-                             f'② ดินถม = {_cbr2:.1f}%</span>')
-            if _cbr3:
-                ref_html += (f'<span style="background:#E8F5E9;color:#1B5E20;border-radius:6px;'
-                             f'padding:3px 8px;font-size:0.82rem;margin-right:6px;font-weight:600">'
-                             f'③ หลังปรับปรุง = {_cbr3:.0f}%</span>')
-            st.markdown(ref_html, unsafe_allow_html=True)
-
-            st.markdown(
-                '<div style="font-size:0.8rem;color:#78909C;margin-top:4px">'
-                '💡 นำค่าอ้างอิงด้านบนไปกรอกใน MR subgrade ของ Nomograph ได้เลย</div>',
-                unsafe_allow_html=True)
-
     cbr_design = float(ss.get('cbr_design') or 4.0)
     MR_psi     = float(ss.get('mr_subgrade_psi') or mr_from_cbr(cbr_design))
 
@@ -531,35 +506,87 @@ def render():
     w18_ref    = int(esal_rigid.get(30, esal_rigid.get(list(esal_rigid.keys())[0], 0)) if esal_rigid else 0)
 
     # ════════════════════════════════════════
-    #  Card 1 — Status bar
+    #  Card 1 — Status รวม CBR + W18
     # ════════════════════════════════════════
     with st.container(border=True):
         st.markdown('<div class="rp-card-title">📋 สถานะข้อมูลจาก ESAL & CBR</div>',
                     unsafe_allow_html=True)
-        s1, s2, s3 = st.columns(3)
-        with s1:
-            if w18_ref > 0:
-                st.markdown(f'<div class="result-pass">✅ W18 = {w18_ref:,.0f} (D=30 cm)</div>',
-                            unsafe_allow_html=True)
-            else:
-                st.markdown('<div class="result-warn">⚠️ ยังไม่มี ESAL — คำนวณใน ESAL Calculator ก่อน</div>',
-                            unsafe_allow_html=True)
-        with s2:
-            kj = ss.get('jpcp_k_eff')
-            if kj:
-                st.markdown(f'<div class="result-pass">✅ k_eff JPCP = {kj:.0f} pci</div>',
-                            unsafe_allow_html=True)
-            else:
-                st.markdown('<div class="result-warn">⚠️ ยังไม่มี k_eff JPCP (Section A)</div>',
-                            unsafe_allow_html=True)
-        with s3:
-            kc = ss.get('crcp_k_eff')
-            if kc:
-                st.markdown(f'<div class="result-pass">✅ k_eff CRCP = {kc:.0f} pci</div>',
-                            unsafe_allow_html=True)
-            else:
-                st.markdown('<div class="result-warn">⚠️ ยังไม่มี k_eff CRCP (Section A)</div>',
-                            unsafe_allow_html=True)
+
+        # ── แถว 1: CBR reference badges ──
+        if _cbr1 or _cbr2 or _cbr3:
+            ref_html = (
+                '<div style="margin-bottom:8px">'
+                '<span style="font-size:0.78rem;color:#90A4AE;margin-right:6px">📌 ค่าอ้างอิง CBR:</span>'
+            )
+            if _cbr1:
+                ref_html += (
+                    f'<span style="background:#E3F2FD;color:#0D47A1;border-radius:6px;'
+                    f'padding:3px 10px;font-size:0.82rem;font-weight:600;margin-right:6px">'
+                    f'① ดินเดิม P90 = {_cbr1:.2f}%'
+                    f'<span style="font-weight:400;margin-left:4px">→ Mr={mr_from_cbr(_cbr1):,.0f} psi</span>'
+                    f'</span>'
+                )
+            if _cbr2:
+                ref_html += (
+                    f'<span style="background:#FFF8E1;color:#E65100;border-radius:6px;'
+                    f'padding:3px 10px;font-size:0.82rem;font-weight:600;margin-right:6px">'
+                    f'② ดินถม = {_cbr2:.1f}%'
+                    f'<span style="font-weight:400;margin-left:4px">→ Mr={mr_from_cbr(_cbr2):,.0f} psi</span>'
+                    f'</span>'
+                )
+            if _cbr3:
+                ref_html += (
+                    f'<span style="background:#E8F5E9;color:#1B5E20;border-radius:6px;'
+                    f'padding:3px 10px;font-size:0.82rem;font-weight:600;margin-right:6px">'
+                    f'③ หลังปรับปรุง = {_cbr3:.0f}%'
+                    f'<span style="font-weight:400;margin-left:4px">→ Mr={mr_from_cbr(_cbr3):,.0f} psi</span>'
+                    f'</span>'
+                )
+            ref_html += (
+                '<div style="font-size:0.78rem;color:#90A4AE;margin-top:4px">'
+                '💡 นำค่าอ้างอิงด้านบนไปกรอกใน MR subgrade ของ Nomograph ได้เลย</div>'
+                '</div>'
+            )
+            st.markdown(ref_html, unsafe_allow_html=True)
+            st.markdown('<hr style="border:none;border-top:1px solid #E0E0E0;margin:6px 0 10px">', unsafe_allow_html=True)
+
+        # ── แถว 2: W18 ทุกความหนา ──
+        if esal_rigid:
+            w18_html = (
+                '<div>'
+                '<span style="font-size:0.78rem;color:#90A4AE;margin-right:6px">🚛 W18 ตามความหนา (จาก ESAL Calculator):</span>'
+                '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'
+            )
+            for d_key in sorted(esal_rigid.keys()):
+                w18_val = esal_rigid[d_key]
+                try:
+                    d_cm  = int(d_key)
+                    d_in  = round(d_cm / 2.54)
+                    w18_v = int(w18_val)
+                    is_30 = (d_cm == 30)
+                    bg    = '#DBEAFE' if is_30 else '#EEF2F7'
+                    bd    = '#1565C0' if is_30 else '#CBD5E1'
+                    fw    = '700'    if is_30 else '400'
+                    w18_html += (
+                        f'<div style="background:{bg};border:1.5px solid {bd};border-radius:8px;'
+                        f'padding:6px 12px;text-align:center;min-width:110px">'
+                        f'<div style="font-size:0.75rem;color:#546E7A;font-weight:600">'
+                        f'D = {d_cm} cm ({d_in} in)</div>'
+                        f'<div style="font-family:IBM Plex Mono,monospace;font-size:0.9rem;'
+                        f'font-weight:{fw};color:#1565C0">{w18_v:,}</div>'
+                        f'</div>'
+                    )
+                except (ValueError, TypeError):
+                    pass
+            w18_html += '</div></div>'
+            st.markdown(w18_html, unsafe_allow_html=True)
+        else:
+            st.markdown(
+                '<div style="background:#FFF3E0;border:1px solid #FFB74D;border-radius:7px;'
+                'padding:8px 12px;font-size:0.85rem;color:#E65100">'
+                '⚠️ ยังไม่มีข้อมูล ESAL — กรุณาคำนวณใน ESAL Calculator ก่อน</div>',
+                unsafe_allow_html=True
+            )
 
     # ════════════════════════════════════════
     #  Card 2 — W18 Input
