@@ -268,7 +268,7 @@ def _kblock(prefix, layers, MR_psi):
     with ls_c2:
         st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
         st.markdown(
-            f'<span style="background:#EEF2F7;color:#546E7A;border-radius:6px;'
+            f'<span style="background:#E3F2FD;color:#0D47A1;border-radius:6px;'
             f'padding:3px 10px;font-size:0.82rem;font-weight:600">'
             f'LS = {ls_val:.1f}</span>',
             unsafe_allow_html=True)
