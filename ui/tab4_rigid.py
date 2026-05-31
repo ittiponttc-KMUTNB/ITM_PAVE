@@ -431,7 +431,7 @@ def render():
 
     # ── CBR Reference + เลือก MR ──
     from engine.rigid_nomograph import mr_from_cbr
-    _cbr1 = float(ss.get('cbr_design') or 0) or None
+    _cbr1 = float(ss.get('cbr_p90') or ss.get('cbr_design') or 0) or None
     _cbr2 = float(ss.get('cbr_fill') or 0) or None
     _ode  = ss.get('odemark_result')
     _cbr3 = float(_ode.get('cbr_eq_design', _ode.get('cbr_eq', 0))) if (
@@ -457,19 +457,10 @@ def render():
                              f'③ หลังปรับปรุง = {_cbr3:.0f}%</span>')
             st.markdown(ref_html, unsafe_allow_html=True)
 
-            btns = []
-            if _cbr1: btns.append((f'① {_cbr1:.2f}%', _cbr1, 'rig_sel1'))
-            if _cbr2: btns.append((f'② {_cbr2:.1f}%', _cbr2, 'rig_sel2'))
-            if _cbr3: btns.append((f'③ {_cbr3:.0f}%', _cbr3, 'rig_sel3'))
-            if btns:
-                bc = st.columns(len(btns))
-                for i, (lbl, val, key) in enumerate(btns):
-                    with bc[i]:
-                        if st.button(f'เลือก {lbl}', key=key, use_container_width=True):
-                            ss['cbr_design']      = val
-                            ss['mr_subgrade_psi'] = mr_from_cbr(val)
-                            ss['k_subgrade_pci']  = mr_from_cbr(val) / 19.4
-                            st.rerun()
+            st.markdown(
+                '<div style="font-size:0.8rem;color:#78909C;margin-top:4px">'
+                '💡 นำค่าอ้างอิงด้านบนไปกรอกใน MR subgrade ของ Nomograph ได้เลย</div>',
+                unsafe_allow_html=True)
 
     cbr_design = float(ss.get('cbr_design') or 4.0)
     MR_psi     = float(ss.get('mr_subgrade_psi') or mr_from_cbr(cbr_design))
