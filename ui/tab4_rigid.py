@@ -229,18 +229,22 @@ def _kblock(prefix, layers, MR_psi):
     # ── MR subgrade input — CRCP sync ตาม JPCP อัตโนมัติ (ถนนเส้นเดียวกัน) ──
     if prefix == 'jpcp':
         _mr_default = float(ss.get('jpcp_mr_inp') or MR_psi or 7000.0)
-        MR_psi_use  = st.number_input(
-            'MR subgrade (psi)',
-            value=_mr_default,
-            min_value=500.0, max_value=50000.0, step=500.0,
-            key='jpcp_mr_inp',
-            help='ค่าจาก TAB 3 — แก้ที่นี่ CRCP จะใช้ค่าเดียวกัน')
+        mr_c1, mr_c2 = st.columns([2, 1])
+        with mr_c1:
+            MR_psi_use = st.number_input(
+                'MR subgrade (psi)',
+                value=_mr_default,
+                min_value=500.0, max_value=50000.0, step=500.0,
+                key='jpcp_mr_inp',
+                help='ค่าจาก TAB 3 — แก้ที่นี่ CRCP จะใช้ค่าเดียวกัน')
         ss['_shared_mr_inp'] = MR_psi_use
-        st.markdown(
-            f'<span style="background:#E3F2FD;color:#0D47A1;border-radius:6px;'
-            f'padding:3px 10px;font-size:0.82rem;font-weight:600">'
-            f'MR = {MR_psi_use:,.0f} psi</span>',
-            unsafe_allow_html=True)
+        with mr_c2:
+            st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<span style="background:#E3F2FD;color:#0D47A1;border-radius:6px;'
+                f'padding:3px 10px;font-size:0.82rem;font-weight:600">'
+                f'MR = {MR_psi_use:,.0f} psi</span>',
+                unsafe_allow_html=True)
     else:
         MR_psi_use = float(ss.get('_shared_mr_inp') or ss.get('jpcp_mr_inp') or MR_psi or 7000.0)
         st.markdown(
@@ -254,16 +258,20 @@ def _kblock(prefix, layers, MR_psi):
     res   = calc_composite_k(MR_psi_use, ESB_psi, float(DSB_used))
     k_inf = res['k_inf_pci']
 
-    ls_val = st.number_input(
-        'Loss of Support (LS)', 0.0, 3.0,
-        st.session_state.get(f'{prefix}_ls', 1.0), 0.5,
-        key=f'{prefix}_ls', format='%.1f',
-        help='LS=0: ไม่มี | LS=1: granular | LS=2-3: stabilized')
-    st.markdown(
-        f'<span style="background:#EEF2F7;color:#546E7A;border-radius:6px;'
-        f'padding:3px 10px;font-size:0.82rem;font-weight:600">'
-        f'LS = {ls_val:.1f}</span>',
-        unsafe_allow_html=True)
+    ls_c1, ls_c2 = st.columns([2, 1])
+    with ls_c1:
+        ls_val = st.number_input(
+            'Loss of Support (LS)', 0.0, 3.0,
+            st.session_state.get(f'{prefix}_ls', 1.0), 0.5,
+            key=f'{prefix}_ls', format='%.1f',
+            help='LS=0: ไม่มี | LS=1: granular | LS=2-3: stabilized')
+    with ls_c2:
+        st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<span style="background:#EEF2F7;color:#546E7A;border-radius:6px;'
+            f'padding:3px 10px;font-size:0.82rem;font-weight:600">'
+            f'LS = {ls_val:.1f}</span>',
+            unsafe_allow_html=True)
 
     k_eff = k_inf if ls_val <= 0 else apply_loss_of_support(k_inf, ls_val)
 
