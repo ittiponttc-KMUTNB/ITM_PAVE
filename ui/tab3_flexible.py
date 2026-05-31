@@ -206,7 +206,15 @@ def render():
                 so_fl = st.number_input("So", value=0.45, step=0.01,
                                         min_value=0.3, max_value=0.6, key="so_fl")
             with c3:
-                pi_fl = st.number_input("Pi", value=4.2, step=0.1, key="pi_fl")
+                pi_fl   = st.number_input("Pi", value=4.2, step=0.1, key="pi_fl")
+                pt_fl2  = (float(ss.get('pt_global', 2.5))
+                           if ss.get('use_pt_global_fl', True)
+                           else float(ss.get('pt_fl2_override') or ss.get('pt_global') or 2.5))
+                dpsi_fl = round(pi_fl - pt_fl2, 2)
+                st.markdown(
+                    _badge('ΔPSI = Pi−Pt', f'{dpsi_fl:.2f}', '', bg='#EEF2F7', color='#546E7A'),
+                    unsafe_allow_html=True
+                )
             with c4:
                 use_pt_global = st.checkbox("ใช้ Pt Global",
                                              value=ss.get('use_pt_global_fl', True),
@@ -223,12 +231,6 @@ def render():
                         value=float(ss.get('pt_fl2_override') or ss.get('pt_global') or 2.5),
                         step=0.1, min_value=2.0, max_value=3.0, key="pt_fl2_override",
                     )
-            # ── ΔPSI badge ──
-            dpsi_fl = round(pi_fl - pt_fl2, 2)
-            st.markdown(
-                _badge('ΔPSI = Pi−Pt', f'{dpsi_fl:.2f}', '', bg='#EEF2F7', color='#546E7A'),
-                unsafe_allow_html=True
-            )
 
     # ════════════════════════════════
     #  คอลัมน์ขวา — Layer Editor
