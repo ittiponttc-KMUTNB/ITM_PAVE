@@ -267,7 +267,11 @@ def _render_odemark(ss):
         with ch1:
             h1_cm = st.number_input('ความหนา (ซม.)', 1.0, 150.0, 30.0, 5.0, key='imp_h1')
         with cmr1:
+            # ── อัพเดต MR ตามวัสดุที่เลือกทันที ──
             mr1_def = IMPROVE_MATERIALS.get(mat1, 100.0)
+            if ss.get('_imp_mat1_prev') != mat1:
+                ss['imp_mr1'] = mr1_def
+                ss['_imp_mat1_prev'] = mat1
             mr1_mpa = st.number_input('MR (MPa)', 10.0, 1000.0,
                                        float(ss.get('imp_mr1') or mr1_def),
                                        10.0, key='imp_mr1')
@@ -281,6 +285,17 @@ def _render_odemark(ss):
                                     key='imp_cbr2')
         mr2_mpa = cbr2 * MPA_PER_CBR
         st.caption(f'MR ชั้นที่ 2 = {cbr2:.1f} × {MPA_PER_CBR:.4f} = **{mr2_mpa:.2f} MPa**')
+
+        # ── แจ้งเตือนความหนารวม ──
+        total_h_cm = h1_cm + h2_cm
+        if abs(total_h_cm - 100.0) > 0.5:
+            st.markdown(
+                f'<div style="background:#FFF8E1;border:1px solid #FFE082;border-radius:7px;'
+                f'padding:7px 12px;font-size:0.85rem;color:#E65100;margin-bottom:6px">'
+                f'⚠️ ความหนารวม = <b>{total_h_cm:.1f} ซม.</b> '
+                f'(แนะนำ 100 ซม. = 1 เมตร) — ไม่บังคับ</div>',
+                unsafe_allow_html=True
+            )
 
         if st.button('คำนวณ CBR_equivalent (Odemark)', type='primary', key='btn_odemark'):
             sum_h    = h1_cm + h2_cm
