@@ -106,17 +106,21 @@ def render():
 
         # sync จาก CBR Analysis
         _cbr_from_tab2 = float(ss.cbr_design) if ss.cbr_design else 3.0
+        _mr_from_tab2  = float(ss.mr_subgrade_psi) if ss.mr_subgrade_psi else cbr_to_mr(_cbr_from_tab2)
 
-        # sync จาก tab2 เสมอ ถ้าผู้ใช้ยังไม่ได้แตะ cbr_fl_input
-        # ใช้ cbr_fl_val เป็นค่า default เริ่มต้นจาก tab2
-        if 'cbr_fl_val' not in ss or abs(float(ss.get('cbr_fl_val') or 0) - _cbr_from_tab2) > 0.001:
-            if not ss.get('cbr_fl_input'):
-                # ยังไม่มีการแตะ widget — sync จาก tab2
-                ss['cbr_fl_val'] = _cbr_from_tab2
-                ss['mr_fl_val']  = cbr_to_mr(_cbr_from_tab2)
+        # sync ลง widget key โดยตรง — Streamlit จะใช้ค่านี้แสดงใน widget
+        # เช็คจาก _cbr_synced_val ว่าค่าจาก tab2 เปลี่ยนหรือไม่
+        if ss.get('_cbr_synced_val') != _cbr_from_tab2:
+            ss['_cbr_synced_val'] = _cbr_from_tab2
+            ss['cbr_fl_val']      = _cbr_from_tab2
+            ss['mr_fl_val']       = _mr_from_tab2
+            # ล้าง widget key เพื่อให้ value= มีผล
+            for k in ('cbr_fl_input', 'mr_fl_input'):
+                if k in ss:
+                    del ss[k]
 
         ss['cbr_fl_val'] = max(0.5,   float(ss.get('cbr_fl_val') or _cbr_from_tab2))
-        ss['mr_fl_val']  = max(500.0, float(ss.get('mr_fl_val') or cbr_to_mr(_cbr_from_tab2)))
+        ss['mr_fl_val']  = max(500.0, float(ss.get('mr_fl_val') or _mr_from_tab2))
 
         c1, c2 = st.columns(2)
         with c1:
