@@ -691,7 +691,7 @@ def render():
         st.markdown('<div style="font-size:0.72rem;color:#90A4AE;font-weight:600;'
                     'letter-spacing:0.05em;margin-bottom:6px">📐 พารามิเตอร์ออกแบบ</div>',
                     unsafe_allow_html=True)
-        p3d1, p3d2, p3d3, p3d4, p3d5 = st.columns([2, 1, 1, 1, 2])
+        p3d1, p3d2, p3d3, p3d4 = st.columns([2, 1, 2, 2])
         with p3d1:
             r0c1, r0c2 = st.columns([3, 2])
             with r0c1:
@@ -707,28 +707,35 @@ def render():
         with p3d2:
             so = st.number_input('So', 0.20, 0.50, ss.get('so_rig', 0.35), 0.01, key='so_rig')
         with p3d3:
-            pt = st.number_input('Pt', 1.5, 3.5, float(ss.get('pt_global', 2.5)), 0.1, key='pt_rig_v7')
+            ptc1, ptc2 = st.columns([3, 2])
+            with ptc1:
+                pt = st.number_input('Pt', 1.5, 3.5, float(ss.get('pt_global', 2.5)), 0.1, key='pt_rig_v7')
             dpsi = round(4.5 - pt, 2)
-            st.markdown(
-                _badge('ΔPSI', f'{dpsi:.2f}', '= 4.5−Pt', bg='#EEF2F7', color='#546E7A'),
-                unsafe_allow_html=True
-            )
+            with ptc2:
+                st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
+                st.markdown(
+                    _badge('ΔPSI', f'{dpsi:.2f}', '', bg='#EEF2F7', color='#546E7A'),
+                    unsafe_allow_html=True
+                )
         with p3d4:
-            st.markdown('<div style="font-size:0.8rem;color:#546E7A;margin-bottom:4px">Cd</div>',
-                        unsafe_allow_html=True)
-            cd_str = st.radio('Cd', ['1.0', '1.1', '1.2'],
-                               index=[1.0,1.1,1.2].index(ss.get('cd_rig', 1.0)),
-                               key='cd_rig_radio', horizontal=True,
-                               label_visibility='collapsed')
-            cd = float(cd_str)
-            st.session_state['cd_rig'] = cd
-        with p3d5:
+            cdl1, cdl2 = st.columns([3, 2])
+            with cdl1:
+                st.markdown('<div style="font-size:0.8rem;color:#546E7A;margin-bottom:4px">Cd</div>',
+                            unsafe_allow_html=True)
+                cd_str = st.radio('Cd', ['1.0', '1.1', '1.2'],
+                                   index=[1.0,1.1,1.2].index(ss.get('cd_rig', 1.0)),
+                                   key='cd_rig_radio', horizontal=True,
+                                   label_visibility='collapsed')
+                cd = float(cd_str)
+                st.session_state['cd_rig'] = cd
             cd_label = {1.0: 'ปกติ', 1.1: 'ดี', 1.2: 'ดีมาก'}.get(cd, '')
-            st.markdown(
-                _badge('Cd (Drainage)', f'{cd:.1f} — {cd_label}', '',
-                       bg='#E3F2FD', color='#0D47A1'),
-                unsafe_allow_html=True
-            )
+            with cdl2:
+                st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
+                st.markdown(
+                    _badge('Cd', f'{cd:.1f} — {cd_label}', '',
+                           bg='#E3F2FD', color='#0D47A1'),
+                    unsafe_allow_html=True
+                )
 
     # ════════════════════════════════════════
     #  Section A — Layers + k∞ (2 คอลัมน์)
