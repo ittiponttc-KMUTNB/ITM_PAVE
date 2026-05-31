@@ -25,6 +25,21 @@ IMPROVE_MATERIALS = {
 
 
 # ─────────────────────────────────────────────
+#  Badge helper
+# ─────────────────────────────────────────────
+
+def _cbr_badge(num, label, cbr_val, mr_val, bg, color, border):
+    return (
+        f'<div style="background:{bg};border:1px solid {border};'
+        f'border-radius:8px;padding:8px 14px;margin-bottom:8px">'
+        f'<span style="font-weight:700;color:{color}">{num} {label}</span>'
+        f'<span style="color:#0D47A1;font-weight:700;margin-left:8px">CBR = {cbr_val}</span>'
+        f'<span style="color:#546E7A;font-size:0.85rem;margin-left:12px">'
+        f'Mr = {mr_val:,.0f} psi</span></div>'
+    )
+
+
+# ─────────────────────────────────────────────
 #  Main render
 # ─────────────────────────────────────────────
 
@@ -33,7 +48,7 @@ def render():
     st.markdown('### 📊 CBR Analysis — Percentile Method')
 
     # ════════════════════════════════
-    #  Row 1: Input + กราฟ
+    #  Row 1: Input (ซ้าย) + กราฟ (ขวา)
     # ════════════════════════════════
     col_l, col_r = st.columns([1, 1.2])
 
@@ -47,19 +62,13 @@ def render():
             _render_chart(ss, cbr_values)
 
     # ════════════════════════════════
-    #  Row 2: ตาราง CBR data
-    # ════════════════════════════════
-    if cbr_values:
-        _render_table(ss, cbr_values)
-
-    # ════════════════════════════════
-    #  Row 3: Odemark
+    #  Row 2: Odemark (full width)
     # ════════════════════════════════
     if ss.get('cbr_design') is not None:
         _render_odemark(ss)
 
     # ════════════════════════════════
-    #  Row 4: Export
+    #  Row 3: Export (full width)
     # ════════════════════════════════
     _render_export(ss)
 
@@ -69,184 +78,167 @@ def render():
 # ─────────────────────────────────────────────
 
 def _render_input(ss):
-    st.markdown('<div class="card"><h4>📁 ข้อมูล CBR</h4>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown('<div class="rp-card-title">📁 ข้อมูล CBR</div>',
+                    unsafe_allow_html=True)
 
-    cbr_mode = st.radio('แหล่งข้อมูล',
-                        ['📁 Upload Excel', '✏️ กรอกค่า', '📌 ใช้ข้อมูลตัวอย่าง'],
-                        horizontal=True, key='cbr_mode')
+        cbr_mode = st.radio('แหล่งข้อมูล',
+                            ['📁 Upload Excel', '✏️ กรอกค่า', '📌 ใช้ข้อมูลตัวอย่าง'],
+                            horizontal=True, key='cbr_mode')
 
-    cbr_vals_input = None
-    if cbr_mode == '📁 Upload Excel':
-        xl = st.file_uploader('ไฟล์ Excel (คอลัมน์ CBR)', type=['xlsx'], key='cbr_xl')
-        if xl:
-            try:
-                df = pd.read_excel(xl, engine='openpyxl')
-                col = next((c for c in df.columns if 'cbr' in c.lower()), df.columns[0])
-                cbr_vals_input = pd.to_numeric(df[col], errors='coerce').dropna().tolist()
-                st.success(f'✅ {len(cbr_vals_input)} ตัวอย่าง')
-            except Exception as e:
-                st.error(str(e))
+        cbr_vals_input = None
+        if cbr_mode == '📁 Upload Excel':
+            xl = st.file_uploader('ไฟล์ Excel (คอลัมน์ CBR)', type=['xlsx'], key='cbr_xl')
+            if xl:
+                try:
+                    df = pd.read_excel(xl, engine='openpyxl')
+                    col = next((c for c in df.columns if 'cbr' in c.lower()), df.columns[0])
+                    cbr_vals_input = pd.to_numeric(df[col], errors='coerce').dropna().tolist()
+                    st.success(f'✅ {len(cbr_vals_input)} ตัวอย่าง')
+                except Exception as e:
+                    st.error(str(e))
 
-    elif cbr_mode == '✏️ กรอกค่า':
-        txt = st.text_area('กรอกค่า CBR (%) คั่นด้วย , หรือ Enter',
-                           placeholder='6.5, 7.2, 8.1, 5.3, ...',
-                           height=120, key='cbr_txt')
-        if txt.strip():
-            parts = re.split(r'[,\n\r\s]+', txt.strip())
-            try:
-                cbr_vals_input = [float(x) for x in parts if x]
-                st.success(f'✅ {len(cbr_vals_input)} ค่า')
-            except Exception:
-                st.error('กรุณากรอกตัวเลขเท่านั้น')
-    else:
-        cbr_vals_input = list(SAMPLE_CBR)
-        st.info(f'📌 ข้อมูลตัวอย่าง {len(SAMPLE_CBR)} ค่า')
+        elif cbr_mode == '✏️ กรอกค่า':
+            txt = st.text_area('กรอกค่า CBR (%) คั่นด้วย , หรือ Enter',
+                               placeholder='6.5, 7.2, 8.1, 5.3, ...',
+                               height=120, key='cbr_txt')
+            if txt.strip():
+                parts = re.split(r'[,\n\r\s]+', txt.strip())
+                try:
+                    cbr_vals_input = [float(x) for x in parts if x]
+                    st.success(f'✅ {len(cbr_vals_input)} ค่า')
+                except Exception:
+                    st.error('กรุณากรอกตัวเลขเท่านั้น')
+        else:
+            cbr_vals_input = list(SAMPLE_CBR)
+            st.info(f'📌 ข้อมูลตัวอย่าง {len(SAMPLE_CBR)} ค่า')
 
-    if cbr_vals_input:
-        ss.cbr_values = cbr_vals_input
+        if cbr_vals_input:
+            ss.cbr_values = cbr_vals_input
 
-    target_pct = st.slider('Percentile ที่ต้องการ (%)', 50, 99,
-                           int(ss.cbr_percentile), step=1, key='pct_slider')
-    ss.cbr_percentile = float(target_pct)
-    st.markdown('</div>', unsafe_allow_html=True)
+        target_pct = st.slider('Percentile ที่ต้องการ (%)', 50, 99,
+                               int(ss.cbr_percentile), step=1, key='pct_slider')
+        ss.cbr_percentile = float(target_pct)
 
-    # ── CBR Reference Panel (read-only) ──
+    # ── CBR Reference Panel ──
     if ss.cbr_values:
         _, n, u_cbr, u_pct, _ = calc_max_rank_percentile(ss.cbr_values)
         cbr_at_pct = interp_cbr(target_pct, u_pct, u_cbr)
-        ss['cbr_p90'] = cbr_at_pct  # บันทึกให้ TAB 3/4 ดึงไปใช้
+        ss['cbr_p90'] = cbr_at_pct
 
-        st.markdown('<div class="card"><h4>📌 ค่าอ้างอิง CBR</h4>',
-                    unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown('<div class="rp-card-title">📌 ค่าอ้างอิง CBR</div>',
+                        unsafe_allow_html=True)
 
-        # ① ดินเดิม P90
-        st.markdown(
-            f'<div style="background:#E3F2FD;border:1px solid #90CAF9;'
-            f'border-radius:8px;padding:8px 14px;margin-bottom:8px">'
-            f'<b>① ดินเดิม</b> — CBR @ P{target_pct:.0f} = '
-            f'<b style="color:#0D47A1">{cbr_at_pct:.2f}%</b>'
-            f'<span style="color:#546E7A;font-size:0.85rem;margin-left:12px">'
-            f'Mr = {cbr_to_mr(cbr_at_pct):,.0f} psi</span></div>',
-            unsafe_allow_html=True)
+            # ① ดินเดิม P90
+            st.markdown(
+                _cbr_badge('①', f'ดินเดิม — CBR @ P{target_pct:.0f} =',
+                           f'{cbr_at_pct:.2f}%', cbr_to_mr(cbr_at_pct),
+                           '#E3F2FD', '#0D47A1', '#90CAF9'),
+                unsafe_allow_html=True)
 
-        # ② ดินถมในพื้นที่ — กรอกได้
-        c_fill, c_fill_mr = st.columns([2, 2])
-        with c_fill:
+            # ② ดินถมในพื้นที่
             cbr_fill = st.number_input(
                 '② CBR ดินถมในพื้นที่ (%)',
                 value=float(ss.get('cbr_fill_input') or 10.0),
                 min_value=0.5, max_value=100.0, step=0.5,
                 key='cbr_fill_input')
             ss['cbr_fill'] = cbr_fill
-        with c_fill_mr:
             st.markdown(
-                f'<div style="padding-top:1.7rem;color:#546E7A;font-size:0.88rem">'
-                f'Mr = <b>{cbr_to_mr(cbr_fill):,.0f} psi</b></div>',
+                _cbr_badge('②', 'ดินถมในพื้นที่ =',
+                           f'{cbr_fill:.1f}%', cbr_to_mr(cbr_fill),
+                           '#FFF8E1', '#E65100', '#FFE082'),
                 unsafe_allow_html=True)
 
-        # ③ หลังปรับปรุง (Odemark) — แสดงเมื่อมีผลคำนวณ
-        ode = ss.get('odemark_result')
-        if ss.get('improve_soil_check') and ode:
-            cbr_imp = ode.get('cbr_eq_design', int(ode.get('cbr_eq', 0)))
+            # ③ หลังปรับปรุง (Odemark)
+            ode = ss.get('odemark_result')
+            if ss.get('improve_soil_check') and ode:
+                cbr_imp = ode.get('cbr_eq_design', int(ode.get('cbr_eq', 0)))
+                st.markdown(
+                    _cbr_badge('③', 'หลังปรับปรุงดินคันทาง (Odemark) =',
+                               f'{cbr_imp}%', cbr_to_mr(cbr_imp),
+                               '#E8F5E9', '#1B5E20', '#A5D6A7'),
+                    unsafe_allow_html=True)
+
             st.markdown(
-                f'<div style="background:#E8F5E9;border:1px solid #A5D6A7;'
-                f'border-radius:8px;padding:8px 14px;margin-top:6px">'
-                f'<b>③ หลังปรับปรุงดินคันทาง (Odemark)</b> — '
-                f'CBR_eq = <b style="color:#1B5E20">{cbr_imp}%</b>'
-                f'<span style="color:#546E7A;font-size:0.85rem;margin-left:12px">'
-                f'Mr = {cbr_to_mr(cbr_imp):,.0f} psi</span></div>',
+                '<div style="color:#78909C;font-size:0.82rem;margin-top:4px">'
+                '💡 ไปที่ TAB Flexible Design หรือ Rigid Design เพื่อเลือกค่าและคำนวณ</div>',
                 unsafe_allow_html=True)
-
-        st.markdown(
-            '<div style="color:#78909C;font-size:0.82rem;margin-top:8px">'
-            '💡 ไปที่ TAB Flexible Design หรือ Rigid Design เพื่อเลือกค่าและคำนวณ</div>',
-            unsafe_allow_html=True)
-
-        # สถิติ
-        with st.expander('📋 สถิติ CBR', expanded=False):
-            s1, s2, s3, s4, s5 = st.columns(5)
-            s1.metric('n',    n)
-            s2.metric('Min',  f'{np.min(ss.cbr_values):.2f}%')
-            s3.metric('Max',  f'{np.max(ss.cbr_values):.2f}%')
-            s4.metric('Mean', f'{np.mean(ss.cbr_values):.2f}%')
-            s5.metric('Std',  f'{np.std(ss.cbr_values):.2f}%')
-
-        st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
-#  กราฟ
+#  กราฟ + สถิติ + ตาราง
 # ─────────────────────────────────────────────
 
 def _render_chart(ss, cbr_values):
-    _, n, u_cbr, u_pct, _ = calc_max_rank_percentile(cbr_values)
+    _, n, u_cbr, u_pct, full_table = calc_max_rank_percentile(cbr_values)
     target_pct = float(ss.cbr_percentile)
     cbr_at_pct = interp_cbr(target_pct, u_pct, u_cbr)
 
-    st.markdown('<div class="card"><h4>📈 กราฟ Percentile vs CBR</h4>',
-                unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown('<div class="rp-card-title">📈 กราฟ Percentile vs CBR</div>',
+                    unsafe_allow_html=True)
 
-    x_max = max(u_cbr) * 1.1
+        x_max = max(u_cbr) * 1.1
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=u_cbr, y=u_pct, mode='lines+markers',
+            name='CBR Distribution',
+            line=dict(color='blue', width=2),
+            marker=dict(size=6, symbol='x', color='black')))
+        fig.add_trace(go.Scatter(
+            x=[0, cbr_at_pct], y=[target_pct, target_pct],
+            mode='lines', name=f'Percentile {target_pct:.0f}%',
+            line=dict(color='red', width=2, dash='dash')))
+        fig.add_trace(go.Scatter(
+            x=[cbr_at_pct, cbr_at_pct], y=[0, target_pct],
+            mode='lines', name=f'CBR={cbr_at_pct:.2f}%',
+            line=dict(color='red', width=2, dash='dash')))
+        fig.add_annotation(
+            x=cbr_at_pct, y=0,
+            text=f'<b>{cbr_at_pct:.2f}</b>',
+            showarrow=True, arrowhead=2, arrowcolor='red',
+            font=dict(size=14, color='red'), ay=40)
+        fig.update_layout(
+            xaxis_title='CBR (%)', yaxis_title='Percentile (%)',
+            plot_bgcolor='white', height=420,
+            xaxis=dict(range=[0, x_max], gridcolor='lightgray',
+                       showline=False, zeroline=False),
+            yaxis=dict(range=[0, 100], gridcolor='lightgray',
+                       showline=False, zeroline=False),
+            legend=dict(bgcolor='rgba(255,255,255,0.8)', bordercolor='black', borderwidth=1),
+            title=dict(text=f'CBR ที่ Percentile {target_pct:.0f}%', x=0.5, xanchor='center'),
+            margin=dict(l=60, r=40, t=60, b=60),
+        )
+        fig.add_shape(type='rect', x0=0, y0=0, x1=x_max, y1=100,
+                      line=dict(color='black', width=2), xref='x', yref='y')
+        st.plotly_chart(fig, use_container_width=True)
 
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=u_cbr, y=u_pct, mode='lines+markers',
-        name='CBR Distribution',
-        line=dict(color='blue', width=2),
-        marker=dict(size=6, symbol='x', color='black')))
-    fig.add_trace(go.Scatter(
-        x=[0, cbr_at_pct], y=[target_pct, target_pct],
-        mode='lines', name=f'Percentile {target_pct:.0f}%',
-        line=dict(color='red', width=2, dash='dash')))
-    fig.add_trace(go.Scatter(
-        x=[cbr_at_pct, cbr_at_pct], y=[0, target_pct],
-        mode='lines', name=f'CBR={cbr_at_pct:.2f}%',
-        line=dict(color='red', width=2, dash='dash')))
-    fig.add_annotation(
-        x=cbr_at_pct, y=0,
-        text=f'<b>{cbr_at_pct:.2f}</b>',
-        showarrow=True, arrowhead=2, arrowcolor='red',
-        font=dict(size=14, color='red'), ay=40)
-    fig.update_layout(
-        xaxis_title='CBR (%)', yaxis_title='Percentile (%)',
-        plot_bgcolor='white', height=420,
-        xaxis=dict(range=[0, x_max], gridcolor='lightgray',
-                   showline=False, zeroline=False),
-        yaxis=dict(range=[0, 100], gridcolor='lightgray',
-                   showline=False, zeroline=False),
-        legend=dict(bgcolor='rgba(255,255,255,0.8)', bordercolor='black', borderwidth=1),
-        title=dict(text=f'CBR ที่ Percentile {target_pct:.0f}%', x=0.5, xanchor='center'),
-        margin=dict(l=60, r=40, t=60, b=60),
-    )
-    fig.add_shape(type='rect', x0=0, y0=0, x1=x_max, y1=100,
-                  line=dict(color='black', width=2), xref='x', yref='y')
+        # ── สถิติ CBR (ใต้กราฟ) ──
+        with st.expander('📋 สถิติ CBR', expanded=False):
+            s1, s2, s3, s4, s5 = st.columns(5)
+            s1.metric('n',    n)
+            s2.metric('Min',  f'{np.min(cbr_values):.2f}%')
+            s3.metric('Max',  f'{np.max(cbr_values):.2f}%')
+            s4.metric('Mean', f'{np.mean(cbr_values):.2f}%')
+            s5.metric('Std',  f'{np.std(cbr_values):.2f}%')
 
-    st.plotly_chart(fig, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-
-# ─────────────────────────────────────────────
-#  ตาราง CBR data
-# ─────────────────────────────────────────────
-
-def _render_table(ss, cbr_values):
-    _, n, _, _, full_table = calc_max_rank_percentile(cbr_values)
-    st.markdown('---')
-    st.markdown('### 📋 ตารางข้อมูล (Max Rank Method)')
-
-    df_display = pd.DataFrame({
-        'ลำดับ':         [ft['order'] for ft in full_table],
-        'CBR (%)':       [ft['cbr']   for ft in full_table],
-        'จำนวนที่≥':     [ft['count_gte'] if ft['show_pct'] else None for ft in full_table],
-        'Percentile (%)': [round(ft['pct_gte'], 1) if ft['show_pct'] else None
-                           for ft in full_table],
-    })
-    half = len(df_display) // 2 + 1
-    c1, c2 = st.columns(2)
-    with c1:
-        st.dataframe(df_display.iloc[:half], use_container_width=True, hide_index=True)
-    with c2:
-        st.dataframe(df_display.iloc[half:], use_container_width=True, hide_index=True)
+        # ── ตาราง Max Rank Method (ใต้กราฟ) ──
+        with st.expander('📊 ตารางข้อมูล (Max Rank Method)', expanded=False):
+            df_display = pd.DataFrame({
+                'ลำดับ':          [ft['order'] for ft in full_table],
+                'CBR (%)':        [ft['cbr']   for ft in full_table],
+                'จำนวนที่≥':      [ft['count_gte'] if ft['show_pct'] else None
+                                   for ft in full_table],
+                'Percentile (%)': [round(ft['pct_gte'], 1) if ft['show_pct'] else None
+                                   for ft in full_table],
+            })
+            half = len(df_display) // 2 + 1
+            tc1, tc2 = st.columns(2)
+            with tc1:
+                st.dataframe(df_display.iloc[:half], use_container_width=True, hide_index=True)
+            with tc2:
+                st.dataframe(df_display.iloc[half:], use_container_width=True, hide_index=True)
 
 
 # ─────────────────────────────────────────────
@@ -263,18 +255,15 @@ def _render_odemark(ss):
 
         st.markdown('#### กำหนดชั้นดิน 2 ชั้น')
 
-        # init defaults
         if 'imp_mat1' not in ss:
             first_mat = list(IMPROVE_MATERIALS.keys())[0]
             ss['imp_mat1'] = first_mat
             ss['imp_mr1']  = IMPROVE_MATERIALS[first_mat]
 
-        # ชั้นที่ 1
         st.markdown('**ชั้นที่ 1 — วัสดุปรับปรุง**')
         cm1, ch1, cmr1 = st.columns(3)
         with cm1:
-            mat1 = st.selectbox('ชนิดวัสดุ', list(IMPROVE_MATERIALS.keys()),
-                                 key='imp_mat1')
+            mat1 = st.selectbox('ชนิดวัสดุ', list(IMPROVE_MATERIALS.keys()), key='imp_mat1')
         with ch1:
             h1_cm = st.number_input('ความหนา (ซม.)', 1.0, 150.0, 30.0, 5.0, key='imp_h1')
         with cmr1:
@@ -283,7 +272,6 @@ def _render_odemark(ss):
                                        float(ss.get('imp_mr1') or mr1_def),
                                        10.0, key='imp_mr1')
 
-        # ชั้นที่ 2
         st.markdown('**ชั้นที่ 2 — ดินถมคันทางใหม่**')
         ch2, cc2 = st.columns(2)
         with ch2:
@@ -346,14 +334,13 @@ def _render_export(ss):
                 + (' · Odemark' if ss.get('odemark_result') else '')
                 + '</div>', unsafe_allow_html=True)
 
-    # Report settings
     c1, c2, c3 = st.columns(3)
     with c1:
-        sec_num = st.text_input('เลขหัวข้อ',  value='4.3',  key='cbr_sec_num')
+        sec_num = st.text_input('เลขหัวข้อ', value='4.3', key='cbr_sec_num')
     with c2:
-        tbl_num = st.text_input('เลขตาราง',   value='4-7',  key='cbr_tbl_num')
+        tbl_num = st.text_input('เลขตาราง',  value='4-7', key='cbr_tbl_num')
     with c3:
-        fig_num = st.text_input('เลขรูป',      value='4-7',  key='cbr_fig_num')
+        fig_num = st.text_input('เลขรูป',     value='4-7', key='cbr_fig_num')
 
     sec_title = st.text_input(
         'ชื่อหัวข้อ',
@@ -377,7 +364,6 @@ def _render_export(ss):
         min_value=0.5, max_value=100.0, step=0.5,
         key='cbr_design_rpt')
 
-    # Preview intro
     cbr_vals = ss.cbr_values
     _, n, u_cbr, u_pct, _ = calc_max_rank_percentile(cbr_vals)
     cbr_at_pct = interp_cbr(float(ss.cbr_percentile), u_pct, u_cbr)
