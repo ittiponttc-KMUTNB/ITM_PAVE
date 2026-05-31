@@ -196,9 +196,13 @@ def _render_esal_rigid(ss):
                                     value=0.5, step=0.05, min_value=0.1, max_value=1.0,
                                     key="ddf_r")
         with c3:
-            pt_r  = st.number_input("Terminal Serviceability Pt",
-                                    value=float(ss.get('pt_rigid', 2.5)),
-                                    step=0.1, min_value=1.5, max_value=3.5, key="pt_r")
+            pt_r = float(ss.get('pt_global', 2.5))
+            st.markdown('<div style="font-size:0.8rem;color:#546E7A;margin-bottom:4px">Terminal Serviceability Pt</div>',
+                        unsafe_allow_html=True)
+            st.markdown(
+                _badge('Pt (Global)', f'{pt_r}', '🔒', bg='#E8F5E9', color='#1B5E20'),
+                unsafe_allow_html=True
+            )
         with c4:
             st.markdown('<div style="margin-top:0.4rem"></div>', unsafe_allow_html=True)
             st.markdown(
@@ -270,9 +274,13 @@ def _render_esal_flex(ss):
                                     value=0.5, step=0.05, min_value=0.1, max_value=1.0,
                                     key="ddf_f")
         with c3:
-            pt_f  = st.number_input("Terminal Serviceability Pt",
-                                    value=float(ss.get('pt_flex', 2.5)),
-                                    step=0.1, min_value=1.5, max_value=3.5, key="pt_f")
+            pt_f = float(ss.get('pt_global', 2.5))
+            st.markdown('<div style="font-size:0.8rem;color:#546E7A;margin-bottom:4px">Terminal Serviceability Pt</div>',
+                        unsafe_allow_html=True)
+            st.markdown(
+                _badge('Pt (Global)', f'{pt_f}', '🔒', bg='#E8F5E9', color='#1B5E20'),
+                unsafe_allow_html=True
+            )
         with c4:
             st.markdown('<div style="margin-top:0.4rem"></div>', unsafe_allow_html=True)
             st.markdown(
