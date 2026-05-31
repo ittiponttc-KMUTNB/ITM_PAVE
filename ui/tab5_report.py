@@ -27,6 +27,7 @@ SAVE_KEYS = [
     'cbr_values', 'cbr_percentile', 'cbr_design',
     'mr_subgrade_psi', 'k_subgrade_pci',
     'odemark_result',
+    'improve_soil_check',
     # Flexible
     'flex_results', 'r0_flex', 'so_flex', 'pi_flex',
     # Rigid
@@ -42,30 +43,26 @@ SAVE_KEYS = [
     'jpcp_esb', 'crcp_esb',
     'jpcp_layers', 'crcp_layers',
     'flex_structure_img',
-]
-
-# Widget keys ทั้งหมดที่ห้าม set โดยตรง
-_WIDGET_KEYS = {
-    'project_name', 'improve_soil_check',
-    'cbr_mode', 'cbr_xl', 'cbr_txt', 'pct_slider', 'design_cbr_input',
-    'use_cbr', 'imp_mat1', 'imp_mr1', 'imp_h1', 'imp_h2', 'imp_cbr2',
-    'btn_odemark', 'crcp_copy', 'w18_manual_mode', 'w18_manual',
-    'use_pt_global_rig', 'use_pt_global_fl',
-    'r0_rig', 'so_rig', 'fc_cube', 'pt_rig_v7', 'cd_rig_radio',
-    'ls_sel', 'jpcp_n', 'crcp_n',
+    # Layer editor Flexible — save เพื่อให้กลับมาแสดงได้
     *[f'fmat_{i}'  for i in range(6)],
     *[f'fh_{i}'    for i in range(6)],
     *[f'fmi_{i}'   for i in range(6)],
     *[f'fwear_{i}' for i in range(6)],
     *[f'fbind_{i}' for i in range(6)],
     *[f'fbase_{i}' for i in range(6)],
-    *[f'fsub_{i}'  for i in range(6)],
+    # Layer editor Rigid
     *[f'jpcp_name_{i}'  for i in range(6)],
     *[f'jpcp_thick_{i}' for i in range(6)],
     *[f'crcp_name_{i}'  for i in range(6)],
     *[f'crcp_thick_{i}' for i in range(6)],
-    *[f'jpcp_E_{i}_{m}' for i in range(6) for m in ['', 'a', 'b']],
-    *[f'crcp_E_{i}_{m}' for i in range(6) for m in ['', 'a', 'b']],
+]
+
+# Widget keys ที่ห้าม set โดยตรง (เฉพาะที่ render ตลอดเวลา)
+# fmat_*, fh_*, jpcp_name_*, jpcp_thick_* ฯลฯ สามารถ set ได้
+# เพราะ set แล้ว st.rerun() ทันที ก่อน widget render
+_WIDGET_KEYS = {
+    'project_name',
+    'improve_soil_check',
 }
 
 
