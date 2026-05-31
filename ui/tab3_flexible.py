@@ -281,14 +281,11 @@ def render():
                         if do_sub:
                             sc1, sc2, sc3 = st.columns(3)
                             with sc1:
-                                h_wear = st.number_input("Wearing (cm)", value=5, step=1,
-                                                         value=int(ss.get(f"fwear_{li}", 5)), min_value=0, key=f"fwear_{li}")
+                                h_wear = st.number_input("Wearing (cm)", value=int(ss.get(f"fwear_{li}", 5)), step=1, min_value=0, key=f"fwear_{li}")
                             with sc2:
-                                h_bind = st.number_input("Binder (cm)", value=5, step=1,
-                                                         value=int(ss.get(f"fbind_{li}", 5)), min_value=0, key=f"fbind_{li}")
+                                h_bind = st.number_input("Binder (cm)", value=int(ss.get(f"fbind_{li}", 5)), step=1, min_value=0, key=f"fbind_{li}")
                             with sc3:
-                                h_base = st.number_input("Base (cm)", value=7, step=1,
-                                                         value=int(ss.get(f"fbase_{li}", 7)), min_value=0, key=f"fbase_{li}")
+                                h_base = st.number_input("Base (cm)", value=int(ss.get(f"fbase_{li}", 7)), step=1, min_value=0, key=f"fbase_{li}")
                             warn_msgs = []
                             if h_wear > 0 and not (4 <= h_wear <= 7):
                                 warn_msgs.append(f"⚠️ Wearing {h_wear} cm เกินช่วงมาตรฐาน (4–7 cm)")
