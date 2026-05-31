@@ -196,15 +196,34 @@ def _kblock(prefix, layers, MR_psi):
     _cbr3 = float(_ode.get('cbr_eq_design', _ode.get('cbr_eq', 0))) if (
                 ss.get('improve_soil_check') and _ode) else None
 
-    refs = []
-    if _cbr1: refs.append(f'① P90={_cbr1:.2f}% → Mr={mr_from_cbr(_cbr1):,.0f} psi')
-    if _cbr2: refs.append(f'② ดินถม={_cbr2:.1f}% → Mr={mr_from_cbr(_cbr2):,.0f} psi')
-    if _cbr3: refs.append(f'③ ปรับปรุง={_cbr3:.0f}% → Mr={mr_from_cbr(_cbr3):,.0f} psi')
-    if refs:
+    ref_badges = []
+    if _cbr1:
+        ref_badges.append(
+            f'<span style="background:#E3F2FD;color:#0D47A1;border-radius:6px;'
+            f'padding:3px 10px;font-size:0.82rem;font-weight:600;margin-right:6px">'
+            f'① ดินเดิม P90 = {_cbr1:.2f}%'
+            f'<span style="font-weight:400;margin-left:4px">→ Mr={mr_from_cbr(_cbr1):,.0f} psi</span>'
+            f'</span>')
+    if _cbr2:
+        ref_badges.append(
+            f'<span style="background:#FFF8E1;color:#E65100;border-radius:6px;'
+            f'padding:3px 10px;font-size:0.82rem;font-weight:600;margin-right:6px">'
+            f'② ดินถม = {_cbr2:.1f}%'
+            f'<span style="font-weight:400;margin-left:4px">→ Mr={mr_from_cbr(_cbr2):,.0f} psi</span>'
+            f'</span>')
+    if _cbr3:
+        ref_badges.append(
+            f'<span style="background:#E8F5E9;color:#1B5E20;border-radius:6px;'
+            f'padding:3px 10px;font-size:0.82rem;font-weight:600;margin-right:6px">'
+            f'③ หลังปรับปรุง = {_cbr3:.0f}%'
+            f'<span style="font-weight:400;margin-left:4px">→ Mr={mr_from_cbr(_cbr3):,.0f} psi</span>'
+            f'</span>')
+    if ref_badges:
         st.markdown(
             '<div style="background:#F8F9FA;border:1px solid #E0E0E0;border-radius:7px;'
-            'padding:6px 10px;margin-bottom:8px;font-size:0.8rem;color:#546E7A">'
-            '<b>📌 MR อ้างอิง:</b>  ' + '  |  '.join(refs) + '</div>',
+            'padding:7px 10px;margin-bottom:8px">'
+            '<span style="font-size:0.78rem;color:#90A4AE;margin-right:6px">📌 MR อ้างอิง:</span>'
+            + ''.join(ref_badges) + '</div>',
             unsafe_allow_html=True)
 
     # ── MR subgrade input — default จาก TAB 3 ──
