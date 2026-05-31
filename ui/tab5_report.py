@@ -184,7 +184,15 @@ def render():
                               use_container_width=True, key="btn_load"):
                     loaded = 0
                     # widget keys ที่ Streamlit จัดการเอง — ห้าม set โดยตรง
-                    _WIDGET_KEYS = {'project_name'}
+                    # keys ที่ผูกกับ widget — Streamlit ห้าม set โดยตรง
+                    _WIDGET_KEYS = {
+                        'project_name',
+                        'improve_soil_check', 'cbr_mode', 'pct_slider',
+                        'imp_mat1', 'imp_mr1', 'imp_h1', 'imp_h2', 'imp_cbr2',
+                        'crcp_copy', 'w18_manual_mode', 'use_pt_global_rig',
+                        'use_pt_global_fl', 'r0_rig', 'so_rig', 'cd_rig_radio',
+                        'fc_cube', 'pt_rig_v7', 'ls_sel',
+                    }
                     for key in SAVE_KEYS:
                         if key in data and key not in _WIDGET_KEYS:
                             ss[key] = data[key]
@@ -215,7 +223,14 @@ def render():
     with st.expander("🗑️ ล้างข้อมูลทั้งหมด", expanded=False):
         st.warning("⚠️ จะลบข้อมูลทั้งหมดในเซสชันนี้ — ไม่สามารถย้อนกลับได้")
         if st.button("🗑️ ล้างข้อมูลทั้งหมด", type="primary", key="btn_reset"):
-            _WIDGET_KEYS = {'project_name'}
+            _WIDGET_KEYS = {
+                'project_name',
+                'improve_soil_check', 'cbr_mode', 'pct_slider',
+                'imp_mat1', 'imp_mr1', 'imp_h1', 'imp_h2', 'imp_cbr2',
+                'crcp_copy', 'w18_manual_mode', 'use_pt_global_rig',
+                'use_pt_global_fl', 'r0_rig', 'so_rig', 'cd_rig_radio',
+                'fc_cube', 'pt_rig_v7', 'ls_sel',
+            }
             for key in SAVE_KEYS + ['traffic_df']:
                 if key in ss and key not in _WIDGET_KEYS:
                     del ss[key]
