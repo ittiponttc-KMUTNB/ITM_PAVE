@@ -671,7 +671,8 @@ def render_export():
     st.markdown('---')
     st.markdown('#### 📄 Export Rigid Pavement Report')
 
-    has_j = bool(rr.get('JPCP') or rr.get('jpcp'))
+    # ptype ที่ _design_block บันทึกคือ 'JPCP/JRCP' และ 'CRCP'
+    has_j = bool(rr.get('JPCP/JRCP') or rr.get('JPCP') or rr.get('jpcp'))
     has_c = bool(rr.get('CRCP') or rr.get('crcp'))
 
     if not has_j and not has_c:
@@ -710,8 +711,8 @@ def render_export():
         }
         # กรอง rigid_results ตามที่เลือก
         rr_filtered = {}
-        if inc_j and (rr.get('JPCP') or rr.get('jpcp')):
-            rr_filtered['JPCP'] = rr.get('JPCP') or rr.get('jpcp')
+        if inc_j and (rr.get('JPCP/JRCP') or rr.get('JPCP') or rr.get('jpcp')):
+            rr_filtered['JPCP'] = rr.get('JPCP/JRCP') or rr.get('JPCP') or rr.get('jpcp')
         if inc_c and (rr.get('CRCP') or rr.get('crcp')):
             rr_filtered['CRCP'] = rr.get('CRCP') or rr.get('crcp')
         ss_dict['rigid_results'] = rr_filtered
