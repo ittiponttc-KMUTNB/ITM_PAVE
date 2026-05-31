@@ -232,7 +232,9 @@ def render():
                     )
                     h_f = _h_total_now
                 else:
-                    h_f = st.number_input("cm", value=0, step=1, min_value=0,
+                    h_f = st.number_input("cm",
+                                          value=int(ss.get(f"fh_{li}", 0)),
+                                          step=1, min_value=0,
                                           key=f"fh_{li}",
                                           label_visibility="collapsed")
             with lc2:
@@ -247,8 +249,9 @@ def render():
                         mi_f = 1.0
                     else:
                         mi_f = st.number_input(
-                            "mi", value=1.0, step=0.1,
-                            min_value=0.6, max_value=1.4,
+                            "mi",
+                            value=float(ss.get(f"fmi_{li}", 1.0)),
+                            step=0.1, min_value=0.6, max_value=1.4,
                             key=f"fmi_{li}",
                             label_visibility="collapsed",
                             format="%.1f",
@@ -264,7 +267,7 @@ def render():
                     # ดินถมคันทาง — กรอก CBR
                     if mat_f == "ดินถมคันทาง CBR กรอกเอง":
                         cbr_sub = st.number_input(
-                            "CBR ดินถม (%)", value=10.0, step=1.0,
+                            "CBR ดินถม (%)", value=float(ss.get(f"fcbr_sub_{li}", 10.0)), step=1.0,
                             min_value=2.0, max_value=30.0,
                             key=f"fcbr_sub_{li}",
                         )
@@ -279,13 +282,13 @@ def render():
                             sc1, sc2, sc3 = st.columns(3)
                             with sc1:
                                 h_wear = st.number_input("Wearing (cm)", value=5, step=1,
-                                                         min_value=0, key=f"fwear_{li}")
+                                                         value=int(ss.get(f"fwear_{li}", 5)), min_value=0, key=f"fwear_{li}")
                             with sc2:
                                 h_bind = st.number_input("Binder (cm)", value=5, step=1,
-                                                         min_value=0, key=f"fbind_{li}")
+                                                         value=int(ss.get(f"fbind_{li}", 5)), min_value=0, key=f"fbind_{li}")
                             with sc3:
                                 h_base = st.number_input("Base (cm)", value=7, step=1,
-                                                         min_value=0, key=f"fbase_{li}")
+                                                         value=int(ss.get(f"fbase_{li}", 7)), min_value=0, key=f"fbase_{li}")
                             warn_msgs = []
                             if h_wear > 0 and not (4 <= h_wear <= 7):
                                 warn_msgs.append(f"⚠️ Wearing {h_wear} cm เกินช่วงมาตรฐาน (4–7 cm)")
