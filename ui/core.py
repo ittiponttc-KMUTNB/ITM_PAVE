@@ -173,6 +173,55 @@ button[kind="primary"] {
     font-size:11px; font-weight:500;
 }
 .wf-arrow { color:#8A9BB0; font-size:10px; }
+
+/* ── Tabs — Main & Sub ── */
+
+/* Tab bar background */
+[data-baseweb="tab-list"] {
+    background: #F0F4F8;
+    border-radius: 10px;
+    padding: 4px;
+    gap: 4px;
+    border-bottom: none !important;
+}
+
+/* Tab ปกติ */
+[data-baseweb="tab"] {
+    background: transparent !important;
+    border-radius: 8px !important;
+    padding: 6px 18px !important;
+    font-weight: 600 !important;
+    font-size: 0.9rem !important;
+    color: #4A5568 !important;
+    border: none !important;
+    transition: all 0.18s ease !important;
+}
+
+/* Tab hover */
+[data-baseweb="tab"]:hover {
+    background: #DBEAFE !important;
+    color: #1565C0 !important;
+}
+
+/* Tab active */
+[data-baseweb="tab"][aria-selected="true"] {
+    background: #0B1F3A !important;
+    color: #FFFFFF !important;
+    border-radius: 8px !important;
+    box-shadow: 0 2px 8px rgba(11,31,58,0.30) !important;
+}
+
+/* ซ่อน underline เส้นใต้ tab */
+[data-baseweb="tab-highlight"],
+[data-baseweb="tab-border"] {
+    display: none !important;
+}
+
+/* Tab panel — ลด padding บน */
+[data-baseweb="tab-panel"] {
+    padding-top: 1rem !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
