@@ -214,7 +214,7 @@ def render():
                 if use_pt_global:
                     pt_fl2 = float(ss.get('pt_global', 2.5))
                     st.markdown(
-                        _badge('Pt (Global)', f'{pt_fl2}', '', bg='#EEF2F7', color='#546E7A'),
+                        _badge('Pt (Global)', f'{pt_fl2}', '', bg='#E8F5E9', color='#1B5E20'),
                         unsafe_allow_html=True
                     )
                 else:
@@ -223,6 +223,12 @@ def render():
                         value=float(ss.get('pt_fl2_override') or ss.get('pt_global') or 2.5),
                         step=0.1, min_value=2.0, max_value=3.0, key="pt_fl2_override",
                     )
+            # ── ΔPSI badge ──
+            dpsi_fl = round(pi_fl - pt_fl2, 2)
+            st.markdown(
+                _badge('ΔPSI = Pi−Pt', f'{dpsi_fl:.2f}', '', bg='#EEF2F7', color='#546E7A'),
+                unsafe_allow_html=True
+            )
 
     # ════════════════════════════════
     #  คอลัมน์ขวา — Layer Editor
@@ -271,98 +277,192 @@ def render():
                     mr  = cbr * 10.0 * 145.038
                 return mr if mr and mr > 0 else None
 
-            # ── Layer rows ──
-            for li in range(6):
+            # ── AC_SURFACE options สำหรับ layer 0 ──
+            AC_SURFACE_OPTS = [
+                'ผิวทางแอสฟัลต์คอนกรีต (AC)',
+                'ผิวทางลาดยาง PMA',
+            ]
+
+            # ════ Layer 0 — AC Surface (แยกออกจาก loop) ════
+            lc0, lc1, lc2, lc3 = st.columns([3, 1, 1, 4])
+            _is_ac_mat  = ss.get('fmat_0', AC_SURFACE_OPTS[0]) in AC_SURFACE_MATERIALS
+            _do_sub_now = ss.get('fsub_0', False) and _is_ac_mat
+            with lc0:
+                mat_f = st.selectbox('L1', AC_SURFACE_OPTS,
+                                     key='fmat_0', label_visibility='collapsed')
+            with lc1:
+                if _do_sub_now:
+                    _h_total_now = (ss.get('fwear_0', 5)
+                                   + ss.get('fbind_0', 5)
+                                   + ss.get('fbase_0', 7))
+                    st.markdown(
+                        f'<div style="padding:0.45rem 0.3rem;font-size:0.88rem;'
+                        f'font-weight:700;text-align:center;color:#1B5E20;'
+                        f'background:#E8F5E9;border-radius:6px;border:1px solid #A5D6A7;">'
+                        f'{_h_total_now} 🔒</div>', unsafe_allow_html=True)
+                    h_f = _h_total_now
+                else:
+                    h_f = st.number_input('cm', value=int(ss.get('fh_0', 0)),
+                                          step=1, min_value=0, key='fh_0',
+                                          label_visibility='collapsed')
+            with lc2:
+                st.markdown('<div style="padding:0.4rem 0.3rem;font-size:0.82rem;'
+                            'text-align:center;color:#666;">1.0 🔒</div>',
+                            unsafe_allow_html=True)
+                mi_f = 1.0
+            with lc3:
+                if mat_f != 'ไม่เลือก' and h_f > 0:
+                    ai, _, mr_psi_layer = FLEX_LAYER_MATERIALS[mat_f]
+                    if mat_f in AC_SURFACE_MATERIALS:
+                        do_sub = st.checkbox('แบ่งชั้นย่อย', key='fsub_0',
+                                             help='แบ่งเป็น Wearing / Binder / Base Course')
+                        if do_sub:
+                            sc1, sc2, sc3 = st.columns(3)
+                            with sc1:
+                                h_wear = st.number_input('Wearing (cm)', value=int(ss.get('fwear_0', 5)), step=1, min_value=0, key='fwear_0')
+                            with sc2:
+                                h_bind = st.number_input('Binder (cm)',  value=int(ss.get('fbind_0', 5)), step=1, min_value=0, key='fbind_0')
+                            with sc3:
+                                h_base = st.number_input('Base (cm)',    value=int(ss.get('fbase_0', 7)), step=1, min_value=0, key='fbase_0')
+                            warn_msgs = []
+                            if h_wear > 0 and not (4 <= h_wear <= 7):
+                                warn_msgs.append(f'⚠️ Wearing {h_wear} cm เกินช่วงมาตรฐาน (4–7 cm)')
+                            if h_bind > 0 and not (4 <= h_bind <= 8):
+                                warn_msgs.append(f'⚠️ Binder {h_bind} cm เกินช่วงมาตรฐาน (4–8 cm)')
+                            if h_base > 0 and not (7 <= h_base <= 10):
+                                warn_msgs.append(f'⚠️ Base {h_base} cm เกินช่วงมาตรฐาน (7–10 cm)')
+                            if warn_msgs:
+                                st.markdown('<div class="result-warn" style="font-size:0.82rem;">'
+                                            + '<br>'.join(warn_msgs) + '</div>',
+                                            unsafe_allow_html=True)
+                            h_total = h_wear + h_bind + h_base
+                            h_in    = h_total / 2.54
+                            sn_i    = ai * h_in * mi_f
+                            _cum_sn_before   = cum_sn_provided
+                            cum_sn          += sn_i
+                            cum_sn_provided += sn_i
+                            try:
+                                _sn_req_i = aashto_sn_required(
+                                    _esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2,
+                                    (_get_mr_of_layer(1) or _mr_sub)) or 0.0
+                            except Exception:
+                                _sn_req_i = 0.0
+                            layer_results.append({
+                                'layer': 1, 'material': mat_f,
+                                'h_cm': h_total, 'ai': ai, 'mi': mi_f,
+                                'sni': round(sn_i, 3), 'cum_sn': round(cum_sn, 3),
+                                'sub': {'wear': h_wear, 'bind': h_bind, 'base': h_base},
+                            })
+                            _sn_req_str = f' | SN_req={_sn_req_i:.3f}' if _sn_req_i > 0 else ''
+                            st.markdown(
+                                f'<div style="padding:0.35rem 0.5rem;font-size:0.80rem;'
+                                f'font-family:monospace;background:#F0F4F8;border-radius:6px;">'
+                                f'W={h_wear}+B={h_bind}+Base={h_base}=<b>{h_total} cm</b>'
+                                f' | ai={ai:.2f} | SNi={sn_i:.3f}'
+                                f' | <b>ΣSNi={cum_sn:.3f}</b>{_sn_req_str}</div>',
+                                unsafe_allow_html=True)
+                            _badge_html = _aashto_badge(
+                                _esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2,
+                                (_get_mr_of_layer(1) or _mr_sub),
+                                _cum_sn_before, ai, mi_f, h_total)
+                            if _badge_html:
+                                st.markdown(_badge_html, unsafe_allow_html=True)
+                        else:
+                            _render_layer_result(
+                                st, 0, mat_f, h_f, ai, mi_f, mr_psi_layer,
+                                cum_sn, cum_sn_provided,
+                                _esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2,
+                                _get_mr_of_layer, _mr_sub, layer_results)
+                            cum_sn          = layer_results[-1]['cum_sn'] if layer_results else cum_sn
+                            cum_sn_provided = cum_sn
+                else:
+                    st.markdown('')
+
+            # ── Divider + Slider จำนวนชั้นวัสดุใต้ AC ──
+            st.markdown('<hr style="border:none;border-top:1.5px solid #CFD8DC;margin:8px 0 4px">',
+                        unsafe_allow_html=True)
+            n_layers = st.slider('จำนวนชั้นวัสดุใต้ AC', 1, 5,
+                                  value=ss.get('flex_n_layers', 2),
+                                  key='flex_n_layers')
+
+            # ════ Layer 1–n (loop) ════
+            for li in range(1, n_layers + 1):
                 lc0, lc1, lc2, lc3 = st.columns([3, 1, 1, 4])
 
-                _is_ac_mat  = ss.get(f"fmat_{li}", mat_options[0]) in AC_SURFACE_MATERIALS
-                _do_sub_now = ss.get(f"fsub_{li}", False) and _is_ac_mat
+                _is_ac_mat  = ss.get(f'fmat_{li}', mat_options[0]) in AC_SURFACE_MATERIALS
+                _do_sub_now = ss.get(f'fsub_{li}', False) and _is_ac_mat
 
                 with lc0:
-                    mat_f = st.selectbox(f"L{li+1}", mat_options,
-                                         key=f"fmat_{li}",
-                                         label_visibility="collapsed")
+                    mat_f = st.selectbox(f'L{li+1}', mat_options,
+                                         key=f'fmat_{li}',
+                                         label_visibility='collapsed')
                 with lc1:
                     if _do_sub_now:
-                        _h_total_now = (ss.get(f"fwear_{li}", 5)
-                                       + ss.get(f"fbind_{li}", 5)
-                                       + ss.get(f"fbase_{li}", 7))
+                        _h_total_now = (ss.get(f'fwear_{li}', 5)
+                                       + ss.get(f'fbind_{li}', 5)
+                                       + ss.get(f'fbase_{li}', 7))
                         st.markdown(
                             f'<div style="padding:0.45rem 0.3rem;font-size:0.88rem;'
                             f'font-weight:700;text-align:center;color:#1B5E20;'
                             f'background:#E8F5E9;border-radius:6px;border:1px solid #A5D6A7;">'
-                            f'{_h_total_now} 🔒</div>',
-                            unsafe_allow_html=True,
-                        )
+                            f'{_h_total_now} 🔒</div>', unsafe_allow_html=True)
                         h_f = _h_total_now
                     else:
-                        h_f = st.number_input("cm",
-                                              value=int(ss.get(f"fh_{li}", 0)),
+                        h_f = st.number_input('cm',
+                                              value=int(ss.get(f'fh_{li}', 0)),
                                               step=1, min_value=0,
-                                              key=f"fh_{li}",
-                                              label_visibility="collapsed")
+                                              key=f'fh_{li}',
+                                              label_visibility='collapsed')
                 with lc2:
                     is_ac = mat_f in AC_MATERIALS_LOCK_MI
-                    if mat_f != "ไม่เลือก":
+                    if mat_f != 'ไม่เลือก':
                         if is_ac:
-                            st.markdown(
-                                '<div style="padding:0.4rem 0.3rem;font-size:0.82rem;'
-                                'text-align:center;color:#666;">1.0 🔒</div>',
-                                unsafe_allow_html=True,
-                            )
+                            st.markdown('<div style="padding:0.4rem 0.3rem;font-size:0.82rem;'
+                                        'text-align:center;color:#666;">1.0 🔒</div>',
+                                        unsafe_allow_html=True)
                             mi_f = 1.0
                         else:
-                            mi_f = st.number_input(
-                                "mi",
-                                value=float(ss.get(f"fmi_{li}", 1.0)),
-                                step=0.1, min_value=0.6, max_value=1.4,
-                                key=f"fmi_{li}",
-                                label_visibility="collapsed",
-                                format="%.1f",
-                            )
+                            mi_f = st.number_input('mi',
+                                                   value=float(ss.get(f'fmi_{li}', 1.0)),
+                                                   step=0.1, min_value=0.6, max_value=1.4,
+                                                   key=f'fmi_{li}',
+                                                   label_visibility='collapsed',
+                                                   format='%.1f')
                     else:
                         mi_f = 1.0
-                        st.markdown("")
+                        st.markdown('')
 
                 with lc3:
-                    if mat_f != "ไม่เลือก" and h_f > 0:
+                    if mat_f != 'ไม่เลือก' and h_f > 0:
                         ai, _, mr_psi_layer = FLEX_LAYER_MATERIALS[mat_f]
-
-                        # ดินถมคันทาง — กรอก CBR
-                        if mat_f == "ดินถมคันทาง CBR กรอกเอง":
+                        if mat_f == 'ดินถมคันทาง CBR กรอกเอง':
                             cbr_sub = st.number_input(
-                                "CBR ดินถม (%)", value=float(ss.get(f"fcbr_sub_{li}", 10.0)), step=1.0,
-                                min_value=2.0, max_value=30.0,
-                                key=f"fcbr_sub_{li}",
-                            )
+                                'CBR ดินถม (%)', value=float(ss.get(f'fcbr_sub_{li}', 10.0)),
+                                step=1.0, min_value=2.0, max_value=30.0, key=f'fcbr_sub_{li}')
                             mr_psi_layer = cbr_sub * 10.0 * 145.038
-                            st.caption(f"Mr = {mr_psi_layer:,.0f} psi ({cbr_sub*10:.0f} MPa)")
-
-                        # AC sub-layers
+                            st.caption(f'Mr = {mr_psi_layer:,.0f} psi ({cbr_sub*10:.0f} MPa)')
                         if mat_f in AC_SURFACE_MATERIALS:
-                            do_sub = st.checkbox("แบ่งชั้นย่อย", key=f"fsub_{li}",
-                                                 help="แบ่งเป็น Wearing / Binder / Base Course")
+                            do_sub = st.checkbox('แบ่งชั้นย่อย', key=f'fsub_{li}',
+                                                 help='แบ่งเป็น Wearing / Binder / Base Course')
                             if do_sub:
                                 sc1, sc2, sc3 = st.columns(3)
                                 with sc1:
-                                    h_wear = st.number_input("Wearing (cm)", value=int(ss.get(f"fwear_{li}", 5)), step=1, min_value=0, key=f"fwear_{li}")
+                                    h_wear = st.number_input('Wearing (cm)', value=int(ss.get(f'fwear_{li}', 5)), step=1, min_value=0, key=f'fwear_{li}')
                                 with sc2:
-                                    h_bind = st.number_input("Binder (cm)", value=int(ss.get(f"fbind_{li}", 5)), step=1, min_value=0, key=f"fbind_{li}")
+                                    h_bind = st.number_input('Binder (cm)',  value=int(ss.get(f'fbind_{li}', 5)), step=1, min_value=0, key=f'fbind_{li}')
                                 with sc3:
-                                    h_base = st.number_input("Base (cm)", value=int(ss.get(f"fbase_{li}", 7)), step=1, min_value=0, key=f"fbase_{li}")
+                                    h_base = st.number_input('Base (cm)',    value=int(ss.get(f'fbase_{li}', 7)), step=1, min_value=0, key=f'fbase_{li}')
                                 warn_msgs = []
                                 if h_wear > 0 and not (4 <= h_wear <= 7):
-                                    warn_msgs.append(f"⚠️ Wearing {h_wear} cm เกินช่วงมาตรฐาน (4–7 cm)")
+                                    warn_msgs.append(f'⚠️ Wearing {h_wear} cm เกินช่วงมาตรฐาน (4–7 cm)')
                                 if h_bind > 0 and not (4 <= h_bind <= 8):
-                                    warn_msgs.append(f"⚠️ Binder {h_bind} cm เกินช่วงมาตรฐาน (4–8 cm)")
+                                    warn_msgs.append(f'⚠️ Binder {h_bind} cm เกินช่วงมาตรฐาน (4–8 cm)')
                                 if h_base > 0 and not (7 <= h_base <= 10):
-                                    warn_msgs.append(f"⚠️ Base {h_base} cm เกินช่วงมาตรฐาน (7–10 cm)")
+                                    warn_msgs.append(f'⚠️ Base {h_base} cm เกินช่วงมาตรฐาน (7–10 cm)')
                                 if warn_msgs:
-                                    st.markdown(
-                                        '<div class="result-warn" style="font-size:0.82rem;">'
-                                        + "<br>".join(warn_msgs) + '</div>',
-                                        unsafe_allow_html=True,
-                                    )
+                                    st.markdown('<div class="result-warn" style="font-size:0.82rem;">'
+                                                + '<br>'.join(warn_msgs) + '</div>',
+                                                unsafe_allow_html=True)
                                 h_total = h_wear + h_bind + h_base
                                 h_in    = h_total / 2.54
                                 sn_i    = ai * h_in * mi_f
@@ -388,13 +488,11 @@ def render():
                                     f'W={h_wear}+B={h_bind}+Base={h_base}=<b>{h_total} cm</b>'
                                     f' | ai={ai:.2f} | SNi={sn_i:.3f}'
                                     f' | <b>ΣSNi={cum_sn:.3f}</b>{_sn_req_str}</div>',
-                                    unsafe_allow_html=True,
-                                )
+                                    unsafe_allow_html=True)
                                 _badge_html = _aashto_badge(
                                     _esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2,
                                     (_get_mr_of_layer(li+1) or _mr_sub),
-                                    _cum_sn_before, ai, mi_f, h_total,
-                                )
+                                    _cum_sn_before, ai, mi_f, h_total)
                                 if _badge_html:
                                     st.markdown(_badge_html, unsafe_allow_html=True)
                             else:
@@ -402,8 +500,7 @@ def render():
                                     st, li, mat_f, h_f, ai, mi_f, mr_psi_layer,
                                     cum_sn, cum_sn_provided,
                                     _esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2,
-                                    _get_mr_of_layer, _mr_sub, layer_results,
-                                )
+                                    _get_mr_of_layer, _mr_sub, layer_results)
                                 cum_sn          = layer_results[-1]['cum_sn'] if layer_results else cum_sn
                                 cum_sn_provided = cum_sn
                         else:
@@ -411,12 +508,11 @@ def render():
                                 st, li, mat_f, h_f, ai, mi_f, mr_psi_layer,
                                 cum_sn, cum_sn_provided,
                                 _esal_f_val, _zr_fl, _so_fl, _pi_fl, _pt_fl2,
-                                _get_mr_of_layer, _mr_sub, layer_results,
-                            )
+                                _get_mr_of_layer, _mr_sub, layer_results)
                             cum_sn          = layer_results[-1]['cum_sn'] if layer_results else cum_sn
                             cum_sn_provided = cum_sn
                     else:
-                        st.markdown("")
+                        st.markdown('')
 
             st.markdown(f"""<div class="result-info" style="margin-top:0.5rem;">
                 ΣSN Provided = <b>{cum_sn:.3f}</b>
