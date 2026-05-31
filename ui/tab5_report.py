@@ -16,16 +16,17 @@ import numpy as np
 #  Keys ที่ต้องการ Save/Load
 # ─────────────────────────────────────────────
 
+# ── เก็บเฉพาะข้อมูลผลคำนวณ ไม่เก็บ widget keys ──
+# widget keys (fmat_*, fh_*, jpcp_name_*, ฯลฯ) Streamlit จัดการเอง
+# ห้าม set หลัง widget render แล้ว → แยกออกจาก SAVE_KEYS
 SAVE_KEYS = [
-    # Project
-    'project_name',
     # Traffic & ESAL
     'ldf', 'ddf', 'pt_global', 'pt_rigid', 'pt_flex',
     'esal_rigid', 'esal_flex', 'sn_list',
     # CBR
     'cbr_values', 'cbr_percentile', 'cbr_design',
     'mr_subgrade_psi', 'k_subgrade_pci',
-    'improve_soil_check', 'odemark_result',
+    'odemark_result',
     # Flexible
     'flex_results', 'r0_flex', 'so_flex', 'pi_flex',
     # Rigid
@@ -39,17 +40,33 @@ SAVE_KEYS = [
     'jpcp_ls_val', 'crcp_ls_val',
     'jpcp_dsb', 'crcp_dsb',
     'jpcp_esb', 'crcp_esb',
-    # Layer editor Flexible
-    *[f'fmat_{i}' for i in range(6)],
-    *[f'fh_{i}'   for i in range(6)],
-    *[f'fmi_{i}'  for i in range(6)],
-    # Layer editor Rigid JPCP
+    'jpcp_layers', 'crcp_layers',
+    'flex_structure_img',
+]
+
+# Widget keys ทั้งหมดที่ห้าม set โดยตรง
+_WIDGET_KEYS = {
+    'project_name', 'improve_soil_check',
+    'cbr_mode', 'cbr_xl', 'cbr_txt', 'pct_slider', 'design_cbr_input',
+    'use_cbr', 'imp_mat1', 'imp_mr1', 'imp_h1', 'imp_h2', 'imp_cbr2',
+    'btn_odemark', 'crcp_copy', 'w18_manual_mode', 'w18_manual',
+    'use_pt_global_rig', 'use_pt_global_fl',
+    'r0_rig', 'so_rig', 'fc_cube', 'pt_rig_v7', 'cd_rig_radio',
+    'ls_sel', 'jpcp_n', 'crcp_n',
+    *[f'fmat_{i}'  for i in range(6)],
+    *[f'fh_{i}'    for i in range(6)],
+    *[f'fmi_{i}'   for i in range(6)],
+    *[f'fwear_{i}' for i in range(6)],
+    *[f'fbind_{i}' for i in range(6)],
+    *[f'fbase_{i}' for i in range(6)],
+    *[f'fsub_{i}'  for i in range(6)],
     *[f'jpcp_name_{i}'  for i in range(6)],
     *[f'jpcp_thick_{i}' for i in range(6)],
-    # Layer editor Rigid CRCP
     *[f'crcp_name_{i}'  for i in range(6)],
     *[f'crcp_thick_{i}' for i in range(6)],
-]
+    *[f'jpcp_E_{i}_{m}' for i in range(6) for m in ['', 'a', 'b']],
+    *[f'crcp_E_{i}_{m}' for i in range(6) for m in ['', 'a', 'b']],
+}
 
 
 def _make_serializable(obj):
@@ -184,15 +201,7 @@ def render():
                               use_container_width=True, key="btn_load"):
                     loaded = 0
                     # widget keys ที่ Streamlit จัดการเอง — ห้าม set โดยตรง
-                    # keys ที่ผูกกับ widget — Streamlit ห้าม set โดยตรง
-                    _WIDGET_KEYS = {
-                        'project_name',
-                        'improve_soil_check', 'cbr_mode', 'pct_slider',
-                        'imp_mat1', 'imp_mr1', 'imp_h1', 'imp_h2', 'imp_cbr2',
-                        'crcp_copy', 'w18_manual_mode', 'use_pt_global_rig',
-                        'use_pt_global_fl', 'r0_rig', 'so_rig', 'cd_rig_radio',
-                        'fc_cube', 'pt_rig_v7', 'ls_sel',
-                    }
+                    # ใช้ _WIDGET_KEYS ที่ define ไว้ด้านบน
                     for key in SAVE_KEYS:
                         if key in data and key not in _WIDGET_KEYS:
                             ss[key] = data[key]
@@ -223,14 +232,7 @@ def render():
     with st.expander("🗑️ ล้างข้อมูลทั้งหมด", expanded=False):
         st.warning("⚠️ จะลบข้อมูลทั้งหมดในเซสชันนี้ — ไม่สามารถย้อนกลับได้")
         if st.button("🗑️ ล้างข้อมูลทั้งหมด", type="primary", key="btn_reset"):
-            _WIDGET_KEYS = {
-                'project_name',
-                'improve_soil_check', 'cbr_mode', 'pct_slider',
-                'imp_mat1', 'imp_mr1', 'imp_h1', 'imp_h2', 'imp_cbr2',
-                'crcp_copy', 'w18_manual_mode', 'use_pt_global_rig',
-                'use_pt_global_fl', 'r0_rig', 'so_rig', 'cd_rig_radio',
-                'fc_cube', 'pt_rig_v7', 'ls_sel',
-            }
+            # ใช้ _WIDGET_KEYS ที่ define ไว้ด้านบน
             for key in SAVE_KEYS + ['traffic_df']:
                 if key in ss and key not in _WIDGET_KEYS:
                     del ss[key]
