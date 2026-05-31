@@ -429,13 +429,53 @@ def render():
     R  = int(ss.get('r0_rig', 90))
     zr = get_zr(R)
 
-    # ── ดึง MR จาก CBR Analysis ──
-    cbr_design = float(ss.get('cbr_design', 4.0))
+    # ── CBR Reference + เลือก MR ──
     from engine.rigid_nomograph import mr_from_cbr
-    MR_psi = float(ss.get('mr_subgrade_psi') or mr_from_cbr(cbr_design))
+    _cbr1 = float(ss.get('cbr_design') or 0) or None
+    _cbr2 = float(ss.get('cbr_fill') or 0) or None
+    _ode  = ss.get('odemark_result')
+    _cbr3 = float(_ode.get('cbr_eq_design', _ode.get('cbr_eq', 0))) if (
+                ss.get('improve_soil_check') and _ode) else None
+
+    if _cbr1 or _cbr2 or _cbr3:
+        with st.container(border=True):
+            st.markdown('<div style="font-size:0.85rem;font-weight:700;color:#0B1F3A;'
+                        'margin-bottom:6px">📌 ค่าอ้างอิง CBR จาก TAB CBR Analysis:</div>',
+                        unsafe_allow_html=True)
+            ref_html = ''
+            if _cbr1:
+                ref_html += (f'<span style="background:#E3F2FD;color:#0D47A1;border-radius:6px;'
+                             f'padding:3px 8px;font-size:0.82rem;margin-right:6px;font-weight:600">'
+                             f'① ดินเดิม P90 = {_cbr1:.2f}%</span>')
+            if _cbr2:
+                ref_html += (f'<span style="background:#FFF8E1;color:#E65100;border-radius:6px;'
+                             f'padding:3px 8px;font-size:0.82rem;margin-right:6px;font-weight:600">'
+                             f'② ดินถม = {_cbr2:.1f}%</span>')
+            if _cbr3:
+                ref_html += (f'<span style="background:#E8F5E9;color:#1B5E20;border-radius:6px;'
+                             f'padding:3px 8px;font-size:0.82rem;margin-right:6px;font-weight:600">'
+                             f'③ หลังปรับปรุง = {_cbr3:.0f}%</span>')
+            st.markdown(ref_html, unsafe_allow_html=True)
+
+            btns = []
+            if _cbr1: btns.append((f'① {_cbr1:.2f}%', _cbr1, 'rig_sel1'))
+            if _cbr2: btns.append((f'② {_cbr2:.1f}%', _cbr2, 'rig_sel2'))
+            if _cbr3: btns.append((f'③ {_cbr3:.0f}%', _cbr3, 'rig_sel3'))
+            if btns:
+                bc = st.columns(len(btns))
+                for i, (lbl, val, key) in enumerate(btns):
+                    with bc[i]:
+                        if st.button(f'เลือก {lbl}', key=key, use_container_width=True):
+                            ss['cbr_design']      = val
+                            ss['mr_subgrade_psi'] = mr_from_cbr(val)
+                            ss['k_subgrade_pci']  = mr_from_cbr(val) / 19.4
+                            st.rerun()
+
+    cbr_design = float(ss.get('cbr_design') or 4.0)
+    MR_psi     = float(ss.get('mr_subgrade_psi') or mr_from_cbr(cbr_design))
 
     # ── ดึง W18 จาก ESAL Calculator ──
-    esal_rigid = ss.get('esal_rigid', {})
+    esal_rigid = ss.get('esal_rigid') or {}
     w18_ref    = int(esal_rigid.get(30, esal_rigid.get(list(esal_rigid.keys())[0], 0)) if esal_rigid else 0)
 
     # ════════════════════════════════════════
@@ -666,7 +706,7 @@ def render_export():
     """ปุ่ม Export Rigid Report — เรียกจาก render() ท้าย tab"""
     import streamlit as st
     ss = st.session_state
-    rr = ss.get('rigid_results', {})
+    rr = ss.get('rigid_results') or {}
 
     st.markdown('---')
     st.markdown('#### 📄 Export Rigid Pavement Report')
