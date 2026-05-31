@@ -226,15 +226,14 @@ def _kblock(prefix, layers, MR_psi):
             + ''.join(ref_badges) + '</div>',
             unsafe_allow_html=True)
 
-    # ── MR subgrade input — default จาก TAB 3 ──
-    _mr_key     = f'{prefix}_mr_inp'
-    _mr_default = float(ss.get(_mr_key) or MR_psi or 7000.0)
+    # ── MR subgrade input — ใช้ key เดียวกันทั้ง JPCP และ CRCP (ถนนเส้นเดียวกัน) ──
+    _mr_default = float(ss.get('mr_subgrade_inp') or MR_psi or 7000.0)
     MR_psi_use  = st.number_input(
         'MR subgrade (psi)',
         value=_mr_default,
         min_value=500.0, max_value=50000.0, step=500.0,
-        key=_mr_key,
-        help='ค่าจาก TAB 3 Flexible Design — แก้ได้อิสระ')
+        key='mr_subgrade_inp',
+        help='ค่าจาก TAB 3 Flexible Design — ใช้ร่วมกันทั้ง JPCP และ CRCP')
 
     res   = calc_composite_k(MR_psi_use, ESB_psi, float(DSB_used))
     k_inf = res['k_inf_pci']
