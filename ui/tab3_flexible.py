@@ -105,48 +105,37 @@ def render():
         st.markdown('<div class="card"><h4>🌍 Subgrade</h4>', unsafe_allow_html=True)
 
         # ── Reference panel จาก TAB 2 ──
-        _cbr1 = float(ss.cbr_design) if ss.cbr_design else None
+        _cbr1 = float(ss.get('cbr_p90') or ss.cbr_design or 0) or None
         _cbr2 = float(ss.get('cbr_fill') or 0)
         _ode  = ss.get('odemark_result')
         _cbr3 = float(_ode.get('cbr_eq_design', _ode.get('cbr_eq', 0))) if (
                     ss.get('improve_soil_check') and _ode) else None
 
-        if _cbr1 or _cbr2 or _cbr3:
-            st.markdown('<div style="background:#F8F9FA;border:1px solid #E0E0E0;'
-                        'border-radius:8px;padding:8px 12px;margin-bottom:10px">'
-                        '<div style="font-size:0.8rem;color:#78909C;margin-bottom:6px">'
-                        '📌 ค่าอ้างอิงจาก TAB CBR Analysis:</div>',
-                        unsafe_allow_html=True)
-            ref_html = ''
-            if _cbr1:
-                ref_html += (f'<span style="background:#E3F2FD;color:#0D47A1;border-radius:6px;'
-                             f'padding:3px 8px;font-size:0.82rem;margin-right:6px;font-weight:600">'
-                             f'① ดินเดิม P90 = {_cbr1:.2f}%</span>')
-            if _cbr2 > 0:
-                ref_html += (f'<span style="background:#FFF8E1;color:#E65100;border-radius:6px;'
-                             f'padding:3px 8px;font-size:0.82rem;margin-right:6px;font-weight:600">'
-                             f'② ดินถม = {_cbr2:.1f}%</span>')
-            if _cbr3:
-                ref_html += (f'<span style="background:#E8F5E9;color:#1B5E20;border-radius:6px;'
-                             f'padding:3px 8px;font-size:0.82rem;margin-right:6px;font-weight:600">'
-                             f'③ หลังปรับปรุง = {_cbr3:.0f}%</span>')
-            st.markdown(ref_html + '</div>', unsafe_allow_html=True)
-
-            # ปุ่มเลือก
-            btns = []
-            if _cbr1: btns.append((f'① {_cbr1:.2f}%', _cbr1, 'fl_sel1'))
-            if _cbr2 > 0: btns.append((f'② {_cbr2:.1f}%', _cbr2, 'fl_sel2'))
-            if _cbr3: btns.append((f'③ {_cbr3:.0f}%', _cbr3, 'fl_sel3'))
-            if btns:
-                btn_cols = st.columns(len(btns))
-                for i, (lbl, val, key) in enumerate(btns):
-                    with btn_cols[i]:
-                        if st.button(f'เลือก {lbl}', key=key, use_container_width=True):
-                            ss['cbr_fl_val'] = val
-                            ss['mr_fl_val']  = cbr_to_mr(val)
-                            for k in ('cbr_fl_input', 'mr_fl_input'):
-                                if k in ss: del ss[k]
-                            st.rerun()
+        # ── Reference panel — แสดงข้อมูลอย่างเดียว ผู้ใช้กรอกเองด้านล่าง ──
+        _ref_parts = []
+        if _cbr1:
+            _ref_parts.append(
+                f'<span style="background:#E3F2FD;color:#0D47A1;border-radius:6px;'
+                f'padding:3px 10px;font-size:0.82rem;margin-right:8px;font-weight:600">'
+                f'① ดินเดิม P90 = {_cbr1:.2f}%  (Mr={cbr_to_mr(_cbr1):,.0f} psi)</span>')
+        if _cbr2 and _cbr2 > 0:
+            _ref_parts.append(
+                f'<span style="background:#FFF8E1;color:#E65100;border-radius:6px;'
+                f'padding:3px 10px;font-size:0.82rem;margin-right:8px;font-weight:600">'
+                f'② ดินถม = {_cbr2:.1f}%  (Mr={cbr_to_mr(_cbr2):,.0f} psi)</span>')
+        if _cbr3:
+            _ref_parts.append(
+                f'<span style="background:#E8F5E9;color:#1B5E20;border-radius:6px;'
+                f'padding:3px 10px;font-size:0.82rem;margin-right:8px;font-weight:600">'
+                f'③ หลังปรับปรุง = {_cbr3:.0f}%  (Mr={cbr_to_mr(_cbr3):,.0f} psi)</span>')
+        if _ref_parts:
+            st.markdown(
+                '<div style="background:#F8F9FA;border:1px solid #E0E0E0;'
+                'border-radius:8px;padding:8px 12px;margin-bottom:10px">'
+                '<div style="font-size:0.8rem;color:#78909C;margin-bottom:5px">'
+                '📌 ค่าอ้างอิงจาก TAB CBR Analysis:</div>'
+                + ' '.join(_ref_parts) + '</div>',
+                unsafe_allow_html=True)
 
         ss['cbr_fl_val'] = max(0.5,   float(ss.get('cbr_fl_val') or 3.0))
         ss['mr_fl_val']  = max(500.0, float(ss.get('mr_fl_val') or 4500.0))
