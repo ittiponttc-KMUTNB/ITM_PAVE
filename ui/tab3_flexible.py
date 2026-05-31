@@ -369,6 +369,9 @@ def render():
 #  Helpers
 # ─────────────────────────────────────────────
 
+    render_export()
+
+
 def _render_layer_result(st_obj, li, mat_f, h_f, ai, mi_f, mr_psi_layer,
                           cum_sn, cum_sn_provided,
                           esal_f_val, zr, so, pi, pt,
@@ -493,3 +496,68 @@ def _design_check(ss, design_esal_f, r0_fl, so_fl, pi_fl, pt_fl2,
                 plt.close(fig)
         except Exception as e:
             st.warning(f"⚠️ ไม่สามารถสร้างรูปโครงสร้างได้: {e}")
+
+
+def render_export():
+    """ปุ่ม Export Flexible Report — เรียกจาก render() ท้าย tab"""
+    import streamlit as st
+    ss = st.session_state
+
+    st.markdown('---')
+    st.markdown('#### 📄 Export Flexible Pavement Report')
+
+    if not ss.get('flex_results'):
+        st.markdown('<div class="result-warn">⚠️ กด Design Check ก่อนแล้วจึง Export ได้ครับ</div>',
+                    unsafe_allow_html=True)
+        return
+
+    fr = ss['flex_results']
+    st.markdown(
+        f'<div class="result-info">'
+        f'✅ SN Required = <b>{fr.get("sn_req",0):.3f}</b> | '
+        f'SN Provided = <b>{fr.get("sn_prov",0):.3f}</b> | '
+        f'{"✅ PASS" if fr.get("pass") else "❌ FAIL"}'
+        f'</div>', unsafe_allow_html=True)
+
+    # Report settings
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: sec_no  = st.text_input('เลขหัวข้อ',        value='4.4',  key='flex_sec_no')
+    with c2: tbl_inp = st.text_input('ตาราง Inputs',      value='4-8',  key='flex_tbl_inp')
+    with c3: tbl_mat = st.text_input('ตาราง Materials',   value='4-9',  key='flex_tbl_mat')
+    with c4: tbl_sn  = st.text_input('ตาราง SN สรุป',    value='4-10', key='flex_tbl_sn')
+
+    c5, c6 = st.columns(2)
+    with c5: num_lanes = st.number_input('จำนวนช่องจราจร', value=2, min_value=1, max_value=8, key='flex_num_lanes')
+    with c6: direction = st.text_input('ทิศทาง', value='2 ทิศทาง (ไป-กลับ)', key='flex_direction')
+
+    if st.button('📄 สร้าง Flexible Report', type='primary',
+                  use_container_width=True, key='btn_flex_report'):
+        try:
+            from engine.report_flexible import build_flexible_report
+            ss_dict = dict(ss)
+            ss_dict['report_settings'] = {
+                'section_number':     sec_no,
+                'table_inputs':       tbl_inp,
+                'table_materials':    tbl_mat,
+                'table_sn':           tbl_sn,
+                'figure_number':      st.session_state.get('flex_fig_no', '4-8'),
+                'num_lanes':          num_lanes,
+                'direction':          direction,
+            }
+            b = build_flexible_report(ss_dict)
+            if b:
+                ss['_flex_report_bytes'] = b
+                st.success('✅ สร้าง Report สำเร็จ — กด Download ด้านล่าง')
+            else:
+                st.error('❌ ไม่สามารถสร้าง Report ได้')
+        except Exception as e:
+            st.error(f'❌ {e}')
+
+    if ss.get('_flex_report_bytes'):
+        proj = ss.get('project_name', '') or 'Report'
+        st.download_button(
+            '📥 Download Flexible Report (.docx)',
+            ss['_flex_report_bytes'],
+            file_name=f'Flexible_Report_{proj}.docx',
+            mime='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            use_container_width=True, key='dl_flex_report')
