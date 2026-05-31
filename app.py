@@ -30,30 +30,47 @@ st.markdown("""
 
 # ── Project name ──
 with st.container():
-    col_proj, col_info = st.columns([2, 3])
+    col_proj, col_steps = st.columns([2, 3])
     with col_proj:
         st.text_input("📁 ชื่อโครงการ", key="project_name",
                       placeholder="กรอกชื่อโครงการ...")
-    with col_info:
-        # Status badges
-        badges = []
-        if ss.get('esal_rigid') or ss.get('esal_flex'):
-            badges.append('✅ ESAL')
-        if ss.get('cbr_design'):
-            badges.append('✅ CBR')
-        if ss.get('flex_results'):
-            badges.append('✅ Flexible')
-        if ss.get('rigid_results'):
-            badges.append('✅ Rigid')
-        if badges:
-            st.markdown(
-                '<div style="padding-top:1.8rem">' +
-                ' &nbsp;|&nbsp; '.join(
-                    f'<span style="background:#E8F5E9;color:#1B5E20;'
-                    f'padding:3px 10px;border-radius:12px;font-size:0.85rem;'
-                    f'font-weight:600">{b}</span>' for b in badges
-                ) + '</div>',
-                unsafe_allow_html=True)
+    with col_steps:
+        steps = [
+            (bool(ss.get('esal_rigid') or ss.get('esal_flex')),
+             '🚛', 'ESAL Calculator'),
+            (bool(ss.get('cbr_values') and ss.get('cbr_design') is not None),
+             '📊', 'CBR Analysis'),
+            (bool(ss.get('flex_results')),
+             '🔧', 'Flexible Design'),
+            (bool(ss.get('rigid_results')),
+             '🏗️', 'Rigid Design'),
+        ]
+        done  = [s for s in steps if s[0]]
+        total = len(steps)
+        n_done = len(done)
+
+        if n_done == 0:
+            intro = '<span style="color:#C62828;font-weight:700;font-size:0.88rem">⚠️ ยังไม่มีการดำเนินการ — เริ่มที่ ESAL Calculator</span>'
+        else:
+            intro = f'<span style="color:#1B5E20;font-weight:700;font-size:0.88rem">✅ ขั้นตอนที่ดำเนินการแล้ว ({n_done}/{total})</span>'
+
+        badges_html = ''
+        for done_flag, icon, label in steps:
+            if done_flag:
+                badges_html += (
+                    f'<span style="background:#E8F5E9;color:#1B5E20;border:1px solid #A5D6A7;'
+                    f'padding:3px 10px;border-radius:12px;font-size:0.82rem;font-weight:600;'
+                    f'margin-right:4px">✅ {icon} {label}</span>')
+            else:
+                badges_html += (
+                    f'<span style="background:#F5F5F5;color:#9E9E9E;border:1px solid #E0E0E0;'
+                    f'padding:3px 10px;border-radius:12px;font-size:0.82rem;font-weight:500;'
+                    f'margin-right:4px">⏳ {icon} {label}</span>')
+
+        st.markdown(
+            f'<div style="padding-top:0.3rem">{intro}</div>'
+            f'<div style="padding-top:0.4rem">{badges_html}</div>',
+            unsafe_allow_html=True)
 
 st.markdown("---")
 
