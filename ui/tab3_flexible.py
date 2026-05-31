@@ -106,13 +106,17 @@ def render():
 
         # sync จาก CBR Analysis
         _cbr_from_tab2 = float(ss.cbr_design) if ss.cbr_design else 3.0
-        if (abs(ss.get('cbr_fl_val', 0) - _cbr_from_tab2) > 0.001
-                and not ss.get('_cbr_fl_user_edited')):
-            ss['cbr_fl_val'] = _cbr_from_tab2
-            ss['mr_fl_val']  = cbr_to_mr(_cbr_from_tab2)
 
-        ss['cbr_fl_val'] = max(0.5,   float(ss.get('cbr_fl_val', 3.0)))
-        ss['mr_fl_val']  = max(500.0, float(ss.get('mr_fl_val',  4500.0)))
+        # sync จาก tab2 เสมอ ถ้าผู้ใช้ยังไม่ได้แตะ cbr_fl_input
+        # ใช้ cbr_fl_val เป็นค่า default เริ่มต้นจาก tab2
+        if 'cbr_fl_val' not in ss or abs(float(ss.get('cbr_fl_val') or 0) - _cbr_from_tab2) > 0.001:
+            if not ss.get('cbr_fl_input'):
+                # ยังไม่มีการแตะ widget — sync จาก tab2
+                ss['cbr_fl_val'] = _cbr_from_tab2
+                ss['mr_fl_val']  = cbr_to_mr(_cbr_from_tab2)
+
+        ss['cbr_fl_val'] = max(0.5,   float(ss.get('cbr_fl_val') or _cbr_from_tab2))
+        ss['mr_fl_val']  = max(500.0, float(ss.get('mr_fl_val') or cbr_to_mr(_cbr_from_tab2)))
 
         c1, c2 = st.columns(2)
         with c1:
@@ -131,7 +135,6 @@ def render():
             )
             mr_fl = ss['mr_fl_val']
 
-        ss['_cbr_fl_user_edited'] = True
         st.markdown(f"Mr = **{mr_fl:,.0f} psi**  ({mr_fl/145.038:.1f} MPa)")
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -157,7 +160,7 @@ def render():
             else:
                 pt_fl2 = st.number_input(
                     "Pt (Override)",
-                    value=float(ss.get('pt_fl2_override', ss.get('pt_global', 2.5))),
+                    value=float(ss.get('pt_fl2_override') or ss.get('pt_global') or 2.5),
                     step=0.1, min_value=2.0, max_value=3.0, key="pt_fl2_override",
                 )
         st.markdown('</div>', unsafe_allow_html=True)
@@ -181,15 +184,15 @@ def render():
 
         # ── พารามิเตอร์สำหรับ D_min badge ──
         _zr_fl  = ZR_MAP.get(ss.get('r0_fl', 90), -1.282)
-        _so_fl  = float(ss.get('so_fl', 0.45))
-        _pi_fl  = float(ss.get('pi_fl', 4.2))
-        _pt_fl2 = (float(ss.get('pt_fl2_override', ss.get('pt_global', 2.5)))
+        _so_fl  = float(ss.get('so_fl') or 0.45)
+        _pi_fl  = float(ss.get('pi_fl') or 4.2)
+        _pt_fl2 = (float(ss.get('pt_fl2_override') or ss.get('pt_global') or 2.5)
                    if not ss.get('use_pt_global_fl', True)
-                   else float(ss.get('pt_global', 2.5)))
+                   else float(ss.get('pt_global') or 2.5))
         _esal_f     = ss.get('esal_flex', {})
         _esal_f_val = (list(_esal_f.values())[ss.get('flex_sn_sel', 0)]
-                       if _esal_f else float(ss.get('flex_esal_manual', 0)))
-        _mr_sub = float(ss.get('mr_fl_val', 4500.0))
+                       if _esal_f else float(ss.get('flex_esal_manual') or 0))
+        _mr_sub = float(ss.get('mr_fl_val') or 4500.0)
 
         try:
             _sn_req = aashto_sn_required(_esal_f_val, _zr_fl, _so_fl,
