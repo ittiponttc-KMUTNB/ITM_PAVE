@@ -571,7 +571,8 @@ def build_report_rigid(ss: dict) -> bytes | None:
 
         rows_w18 = []
         for D, lbl in zip(SLAB_THICKNESSES, SLAB_LABELS):
-            wc = aashto_rigid_w18(D, pi, pt, ss.get('zr_rig', -1.282), so,
+            zr_use = float(ss.get('zr_rig') or ss.get('zr_rig_val') or -1.282)
+            wc = aashto_rigid_w18(D, pi, pt, zr_use, so,
                                   sc, cd, j, ec_psi, k_eff)
             if wc is None:
                 rows_w18.append([lbl, "-", f"{w18_req:,.0f}", "-",
