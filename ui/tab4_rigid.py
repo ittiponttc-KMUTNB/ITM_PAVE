@@ -678,8 +678,9 @@ def render():
         ec_psi = calc_ec(fc_cyl)
         with p3c2:
             st.markdown(
-                _badge("f'c,cyl", f'{fc_cyl:,.0f}', 'ksc',  bg='#E3F2FD', color='#0D47A1') +
-                _badge('Ec',      f'{ec_psi:,.0f}', 'psi',  bg='#E3F2FD', color='#0D47A1') +
+                _badge("f'c Cube",     f'{fc_cube}',      'ksc', bg='#EEF2F7', color='#546E7A') +
+                _badge("f'c,cyl",      f'{fc_cyl:,.0f}',  'ksc', bg='#E3F2FD', color='#0D47A1') +
+                _badge('Ec',           f'{ec_psi:,.0f}',  'psi', bg='#E3F2FD', color='#0D47A1') +
                 _badge('Sc (ทล.lock)', f'{SC_FIXED:.0f}', 'psi', bg='#E8F5E9', color='#1B5E20'),
                 unsafe_allow_html=True
             )
@@ -690,15 +691,19 @@ def render():
         st.markdown('<div style="font-size:0.72rem;color:#90A4AE;font-weight:600;'
                     'letter-spacing:0.05em;margin-bottom:6px">📐 พารามิเตอร์ออกแบบ</div>',
                     unsafe_allow_html=True)
-        p3d1, p3d2, p3d3, p3d4, p3d5 = st.columns([1, 1, 1, 1, 2])
+        p3d1, p3d2, p3d3, p3d4, p3d5 = st.columns([2, 1, 1, 1, 2])
         with p3d1:
-            r0_val = st.selectbox('R0 (%)', [85,90,91,92,93,94,95,96,97,98,99],
-                                   index=1, key='r0_rig')
+            r0c1, r0c2 = st.columns([3, 2])
+            with r0c1:
+                r0_val = st.selectbox('R0 (%)', [85,90,91,92,93,94,95,96,97,98,99],
+                                       index=1, key='r0_rig')
             zr = get_zr(r0_val)
-            st.markdown(
-                _badge('ZR', f'{zr:.3f}', '', bg='#EEF2F7', color='#546E7A'),
-                unsafe_allow_html=True
-            )
+            with r0c2:
+                st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
+                st.markdown(
+                    _badge('ZR', f'{zr:.3f}', '', bg='#EEF2F7', color='#546E7A'),
+                    unsafe_allow_html=True
+                )
         with p3d2:
             so = st.number_input('So', 0.20, 0.50, ss.get('so_rig', 0.35), 0.01, key='so_rig')
         with p3d3:
