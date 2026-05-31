@@ -396,12 +396,12 @@ def plot_f33(MR_psi, ESB_psi, DSB_in, res):
         ax.plot([x,x],[0.5,0.513],color='black',lw=0.8)
         ax.plot([x,x],[0.5,0.487],color='black',lw=0.8)
         ax.text(x,0.517,str(d),ha='center',va='bottom',fontsize=7)
-    ax.text(0.20,0.545,'Subbase Thickness, $D_{SB}$ (inches)',ha='center',va='bottom',fontsize=8)
-    ax.text(0.47,0.97,'Subbase Elastic\nModulus, $E_{SB}$ (psi)',
+    ax.text(0.20,0.545,'Subbase Thickness, D_SB (inches)',ha='center',va='bottom',fontsize=8)
+    ax.text(0.47,0.97,'Subbase Elastic\nModulus, E_SB (psi)',
             ha='right',va='top',fontsize=8,style='italic',bbox=dict(fc='white',ec='none',pad=1))
-    ax.text(0.98,0.97,'Composite Modulus of\nSubgrade Reaction,\n$k_\\infty$ (pci)',
+    ax.text(0.98,0.97,'Composite Modulus of\nSubgrade Reaction,\nk-inf (pci)',
             ha='right',va='top',fontsize=7,style='italic',bbox=dict(fc='white',ec='none',pad=1))
-    ax.text(0.13,0.05,'Roadbed Soil\nResilient Modulus,\n$M_R$ (psi)',
+    ax.text(0.13,0.05,'Roadbed Soil\nResilient Modulus,\nM_R (psi)',
             ha='center',va='bottom',fontsize=8,style='italic',bbox=dict(fc='white',ec='none',pad=1))
 
     ax.plot([x_dsb,x_dsb],[y_A,y_B],'r-',lw=1.8)
@@ -409,14 +409,17 @@ def plot_f33(MR_psi, ESB_psi, DSB_in, res):
     ax.plot([x_dsb,x_C],[y_B,y_C],'r-',lw=1.8)
     ax.plot([x_D,x_C],[y_D,y_C],'r-',lw=1.8)
     ax.plot(x_C,y_C,'ro',markersize=8,zorder=5)
-    ax.annotate(f'$k_\\infty$ = {k_inf:.0f} pci',
+    ax.annotate(f'k-inf = {k_inf:.0f} pci',
                 xy=(x_C,y_C),xytext=(x_C+0.07,y_C-0.06),
                 fontsize=9,color='red',fontweight='bold',
                 arrowprops=dict(arrowstyle='->',color='red',lw=1.2))
-    ax.set_title(f'$M_R$={MR_psi:,.0f} psi   $D_{{SB}}$={DSB_in} in   '
-                 f'$E_{{SB}}$={ESB_psi:,.0f} psi   →   $k_\\infty$ = {k_inf:.0f} pci',
+    ax.set_title(f'MR={MR_psi:,.0f} psi  D_SB={DSB_in} in  '
+                 f'E_SB={ESB_psi:,.0f} psi  →  k-inf={k_inf:.0f} pci',
                  fontsize=9,color='red')
-    plt.tight_layout()
+    try:
+        plt.tight_layout()
+    except Exception:
+        pass
     return fig
 
 def plot_f34(k_inf_pci, ls, k_eff_pci):
