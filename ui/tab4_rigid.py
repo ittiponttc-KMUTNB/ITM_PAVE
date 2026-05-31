@@ -616,6 +616,8 @@ def render():
         st.markdown('---')
         _render_comparison(res_j, res_c)
 
+    render_export()
+
 
 # ─────────────────────────────────────────────
 #  Comparison Summary
