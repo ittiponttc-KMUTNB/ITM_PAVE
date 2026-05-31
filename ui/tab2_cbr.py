@@ -114,6 +114,7 @@ def _render_input(ss):
     if ss.cbr_values:
         _, n, u_cbr, u_pct, _ = calc_max_rank_percentile(ss.cbr_values)
         cbr_at_pct = interp_cbr(target_pct, u_pct, u_cbr)
+        ss['cbr_p90'] = cbr_at_pct  # บันทึกให้ TAB 3/4 ดึงไปใช้
 
         st.markdown('<div class="card"><h4>📌 ค่าอ้างอิง CBR</h4>',
                     unsafe_allow_html=True)
