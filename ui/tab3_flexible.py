@@ -104,23 +104,52 @@ def render():
         # ── Subgrade ──
         st.markdown('<div class="card"><h4>🌍 Subgrade</h4>', unsafe_allow_html=True)
 
-        # sync จาก CBR Analysis
-        _cbr_from_tab2 = float(ss.cbr_design) if ss.cbr_design else 3.0
-        _mr_from_tab2  = float(ss.mr_subgrade_psi) if ss.mr_subgrade_psi else cbr_to_mr(_cbr_from_tab2)
+        # ── Reference panel จาก TAB 2 ──
+        _cbr1 = float(ss.cbr_design) if ss.cbr_design else None
+        _cbr2 = float(ss.get('cbr_fill') or 0)
+        _ode  = ss.get('odemark_result')
+        _cbr3 = float(_ode.get('cbr_eq_design', _ode.get('cbr_eq', 0))) if (
+                    ss.get('improve_soil_check') and _ode) else None
 
-        # sync ลง widget key โดยตรง — Streamlit จะใช้ค่านี้แสดงใน widget
-        # เช็คจาก _cbr_synced_val ว่าค่าจาก tab2 เปลี่ยนหรือไม่
-        if ss.get('_cbr_synced_val') != _cbr_from_tab2:
-            ss['_cbr_synced_val'] = _cbr_from_tab2
-            ss['cbr_fl_val']      = _cbr_from_tab2
-            ss['mr_fl_val']       = _mr_from_tab2
-            # ล้าง widget key เพื่อให้ value= มีผล
-            for k in ('cbr_fl_input', 'mr_fl_input'):
-                if k in ss:
-                    del ss[k]
+        if _cbr1 or _cbr2 or _cbr3:
+            st.markdown('<div style="background:#F8F9FA;border:1px solid #E0E0E0;'
+                        'border-radius:8px;padding:8px 12px;margin-bottom:10px">'
+                        '<div style="font-size:0.8rem;color:#78909C;margin-bottom:6px">'
+                        '📌 ค่าอ้างอิงจาก TAB CBR Analysis:</div>',
+                        unsafe_allow_html=True)
+            ref_html = ''
+            if _cbr1:
+                ref_html += (f'<span style="background:#E3F2FD;color:#0D47A1;border-radius:6px;'
+                             f'padding:3px 8px;font-size:0.82rem;margin-right:6px;font-weight:600">'
+                             f'① ดินเดิม P90 = {_cbr1:.2f}%</span>')
+            if _cbr2 > 0:
+                ref_html += (f'<span style="background:#FFF8E1;color:#E65100;border-radius:6px;'
+                             f'padding:3px 8px;font-size:0.82rem;margin-right:6px;font-weight:600">'
+                             f'② ดินถม = {_cbr2:.1f}%</span>')
+            if _cbr3:
+                ref_html += (f'<span style="background:#E8F5E9;color:#1B5E20;border-radius:6px;'
+                             f'padding:3px 8px;font-size:0.82rem;margin-right:6px;font-weight:600">'
+                             f'③ หลังปรับปรุง = {_cbr3:.0f}%</span>')
+            st.markdown(ref_html + '</div>', unsafe_allow_html=True)
 
-        ss['cbr_fl_val'] = max(0.5,   float(ss.get('cbr_fl_val') or _cbr_from_tab2))
-        ss['mr_fl_val']  = max(500.0, float(ss.get('mr_fl_val') or _mr_from_tab2))
+            # ปุ่มเลือก
+            btns = []
+            if _cbr1: btns.append((f'① {_cbr1:.2f}%', _cbr1, 'fl_sel1'))
+            if _cbr2 > 0: btns.append((f'② {_cbr2:.1f}%', _cbr2, 'fl_sel2'))
+            if _cbr3: btns.append((f'③ {_cbr3:.0f}%', _cbr3, 'fl_sel3'))
+            if btns:
+                btn_cols = st.columns(len(btns))
+                for i, (lbl, val, key) in enumerate(btns):
+                    with btn_cols[i]:
+                        if st.button(f'เลือก {lbl}', key=key, use_container_width=True):
+                            ss['cbr_fl_val'] = val
+                            ss['mr_fl_val']  = cbr_to_mr(val)
+                            for k in ('cbr_fl_input', 'mr_fl_input'):
+                                if k in ss: del ss[k]
+                            st.rerun()
+
+        ss['cbr_fl_val'] = max(0.5,   float(ss.get('cbr_fl_val') or 3.0))
+        ss['mr_fl_val']  = max(500.0, float(ss.get('mr_fl_val') or 4500.0))
 
         c1, c2 = st.columns(2)
         with c1:
@@ -138,6 +167,13 @@ def render():
                 key="mr_fl_input", on_change=_on_mr_fl_change,
             )
             mr_fl = ss['mr_fl_val']
+
+        # Warning ถ้ากรอกสูงกว่า P90
+        if _cbr1 and cbr_fl > _cbr1 * 1.2:
+            st.markdown(
+                f'<div class="result-warn">⚠️ CBR ({cbr_fl:.1f}%) สูงกว่า '
+                f'ดินเดิม P90 ({_cbr1:.2f}%) มากกว่า 20%</div>',
+                unsafe_allow_html=True)
 
         st.markdown(f"Mr = **{mr_fl:,.0f} psi**  ({mr_fl/145.038:.1f} MPa)")
         st.markdown('</div>', unsafe_allow_html=True)
