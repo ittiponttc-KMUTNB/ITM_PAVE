@@ -36,13 +36,17 @@ with st.container():
                       placeholder="กรอกชื่อโครงการ...")
     with col_steps:
         steps = [
+            # ESAL: มีค่าจริงเมื่อคำนวณแล้ว (dict ไม่ว่าง)
             (bool(ss.get('esal_rigid') or ss.get('esal_flex')),
              '🚛', 'ESAL Calculator'),
-            (bool(ss.get('cbr_values') and ss.get('cbr_design') is not None),
+            # CBR: มีค่าจริงเมื่อ Upload/กรอก + กด "ใช้ค่านี้"
+            (bool(ss.get('cbr_values') and ss.get('mr_subgrade_psi') != 4500.0),
              '📊', 'CBR Analysis'),
-            (bool(ss.get('flex_results')),
+            # Flexible: มีค่าจริงเมื่อกด Design Check
+            (bool(ss.get('flex_results') and ss.get('flex_results') != {}),
              '🔧', 'Flexible Design'),
-            (bool(ss.get('rigid_results')),
+            # Rigid: มีค่าจริงเมื่อกด Design Check
+            (bool(ss.get('rigid_results') and ss.get('rigid_results') != {}),
              '🏗️', 'Rigid Design'),
         ]
         done  = [s for s in steps if s[0]]
