@@ -658,3 +658,112 @@ def _render_comparison(res_j, res_c):
             rc1.markdown(f'<div style="font-size:12px;color:#546E7A">{label}</div>', unsafe_allow_html=True)
             rc2.markdown(f'<div style="font-family:IBM Plex Mono,monospace;font-size:12px;font-weight:600;color:{_JPCP_BD}">{vj}</div>', unsafe_allow_html=True)
             rc3.markdown(f'<div style="font-family:IBM Plex Mono,monospace;font-size:12px;font-weight:600;color:{_CRCP_BD}">{vc}</div>', unsafe_allow_html=True)
+
+
+def render_export():
+    """ปุ่ม Export Rigid Report — เรียกจาก render() ท้าย tab"""
+    import streamlit as st
+    ss = st.session_state
+    rr = ss.get('rigid_results', {})
+
+    st.markdown('---')
+    st.markdown('#### 📄 Export Rigid Pavement Report')
+
+    has_j = bool(rr.get('JPCP') or rr.get('jpcp'))
+    has_c = bool(rr.get('CRCP') or rr.get('crcp'))
+
+    if not has_j and not has_c:
+        st.markdown('<div class="result-warn">⚠️ กด Design Check JPCP หรือ CRCP ก่อนครับ</div>',
+                    unsafe_allow_html=True)
+        return
+
+    # แสดงสถานะ
+    s1, s2 = st.columns(2)
+    with s1:
+        cls = 'result-pass' if has_j else 'result-warn'
+        st.markdown(f'<div class="{cls}">{"✅ JPCP/JRCP พร้อม" if has_j else "⚠️ JPCP ยังไม่ได้คำนวณ"}</div>',
+                    unsafe_allow_html=True)
+    with s2:
+        cls = 'result-pass' if has_c else 'result-warn'
+        st.markdown(f'<div class="{cls}">{"✅ CRCP พร้อม" if has_c else "⚠️ CRCP ยังไม่ได้คำนวณ"}</div>',
+                    unsafe_allow_html=True)
+
+    # Report settings
+    c1, c2, c3 = st.columns(3)
+    with c1: sec_no     = st.text_input('เลขหัวข้อหลัก',   value='4.5', key='rig_sec_no')
+    with c2: fig_prefix = st.text_input('Prefix เลขรูป',    value='4-',  key='rig_fig_prefix')
+    with c3: fig_start  = st.number_input('เริ่มที่รูปที่', value=5, min_value=1, key='rig_fig_start')
+
+    inc_sum = st.checkbox('รวมหัวข้อสรุปโครงสร้างชั้นทาง', value=True, key='rig_inc_sum')
+
+    # ปุ่ม export แบบต่างๆ
+    def _do_export(inc_j, inc_c, label):
+        from engine.report_rigid import build_rigid_report
+        ss_dict = dict(ss)
+        ss_dict['report_settings'] = {
+            'section_number': sec_no,
+            'figure_prefix':  fig_prefix,
+            'figure_start':   int(fig_start),
+            'inc_summary':    inc_sum,
+        }
+        # กรอง rigid_results ตามที่เลือก
+        rr_filtered = {}
+        if inc_j and (rr.get('JPCP') or rr.get('jpcp')):
+            rr_filtered['JPCP'] = rr.get('JPCP') or rr.get('jpcp')
+        if inc_c and (rr.get('CRCP') or rr.get('crcp')):
+            rr_filtered['CRCP'] = rr.get('CRCP') or rr.get('crcp')
+        ss_dict['rigid_results'] = rr_filtered
+        b = build_rigid_report(ss_dict)
+        if b:
+            ss[f'_rigid_report_{label}'] = b
+            st.success(f'✅ สร้าง {label} Report สำเร็จ')
+        else:
+            st.error('❌ ไม่สามารถสร้าง Report ได้')
+
+    proj = ss.get('project_name', '') or 'Report'
+
+    if has_j and has_c:
+        if st.button('📄 สร้าง Report รวม JPCP + CRCP', type='primary',
+                      use_container_width=True, key='btn_rig_both'):
+            _do_export(True, True, 'Combined')
+        if ss.get('_rigid_report_Combined'):
+            st.download_button('📥 Download Combined Report (.docx)',
+                               ss['_rigid_report_Combined'],
+                               f'Rigid_Combined_{proj}.docx',
+                               'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                               use_container_width=True, key='dl_rig_both')
+        cc1, cc2 = st.columns(2)
+        with cc1:
+            if st.button('📄 JPCP only', use_container_width=True, key='btn_rig_j'):
+                _do_export(True, False, 'JPCP')
+            if ss.get('_rigid_report_JPCP'):
+                st.download_button('📥 Download JPCP (.docx)', ss['_rigid_report_JPCP'],
+                                   f'Rigid_JPCP_{proj}.docx',
+                                   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                   use_container_width=True, key='dl_rig_j')
+        with cc2:
+            if st.button('📄 CRCP only', use_container_width=True, key='btn_rig_c'):
+                _do_export(False, True, 'CRCP')
+            if ss.get('_rigid_report_CRCP'):
+                st.download_button('📥 Download CRCP (.docx)', ss['_rigid_report_CRCP'],
+                                   f'Rigid_CRCP_{proj}.docx',
+                                   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                   use_container_width=True, key='dl_rig_c')
+    elif has_j:
+        if st.button('📄 สร้าง JPCP Report', type='primary',
+                      use_container_width=True, key='btn_rig_j2'):
+            _do_export(True, False, 'JPCP')
+        if ss.get('_rigid_report_JPCP'):
+            st.download_button('📥 Download JPCP Report (.docx)', ss['_rigid_report_JPCP'],
+                               f'Rigid_JPCP_{proj}.docx',
+                               'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                               use_container_width=True, key='dl_rig_j2')
+    elif has_c:
+        if st.button('📄 สร้าง CRCP Report', type='primary',
+                      use_container_width=True, key='btn_rig_c2'):
+            _do_export(False, True, 'CRCP')
+        if ss.get('_rigid_report_CRCP'):
+            st.download_button('📥 Download CRCP Report (.docx)', ss['_rigid_report_CRCP'],
+                               f'Rigid_CRCP_{proj}.docx',
+                               'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                               use_container_width=True, key='dl_rig_c2')
