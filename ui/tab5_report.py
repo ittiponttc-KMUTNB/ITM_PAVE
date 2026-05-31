@@ -57,12 +57,37 @@ SAVE_KEYS = [
     *[f'crcp_thick_{i}' for i in range(6)],
 ]
 
-# Widget keys ที่ห้าม set โดยตรง (เฉพาะที่ render ตลอดเวลา)
-# fmat_*, fh_*, jpcp_name_*, jpcp_thick_* ฯลฯ สามารถ set ได้
-# เพราะ set แล้ว st.rerun() ทันที ก่อน widget render
+# Widget keys ที่ห้าม set โดยตรง
+# (render ตลอดเวลาเพราะ st.tabs() render ทุก tab พร้อมกัน)
 _WIDGET_KEYS = {
+    # app.py
     'project_name',
-    'improve_soil_check',
+    # tab2 CBR
+    'improve_soil_check', 'cbr_mode', 'pct_slider', 'design_cbr_input',
+    'imp_mat1', 'imp_mr1', 'imp_h1', 'imp_h2', 'imp_cbr2',
+    # tab3 Flexible
+    'r0_fl', 'so_fl', 'pi_fl', 'cbr_fl_input', 'mr_fl_input',
+    'pt_fl2_override', 'use_pt_global_fl', 'flex_sn_sel', 'flex_esal_manual',
+    *[f'fmat_{i}'       for i in range(6)],
+    *[f'fh_{i}'         for i in range(6)],
+    *[f'fmi_{i}'        for i in range(6)],
+    *[f'fsub_{i}'       for i in range(6)],
+    *[f'fwear_{i}'      for i in range(6)],
+    *[f'fbind_{i}'      for i in range(6)],
+    *[f'fbase_{i}'      for i in range(6)],
+    *[f'fcbr_sub_{i}'   for i in range(6)],
+    # tab4 Rigid
+    'r0_rig', 'so_rig', 'fc_cube', 'pt_rig_v7', 'cd_rig_radio',
+    'use_pt_global_rig', 'w18_manual_mode', 'w18_manual',
+    'jpcp_n', 'crcp_n', 'crcp_copy',
+    *[f'jpcp_name_{i}'  for i in range(6)],
+    *[f'jpcp_thick_{i}' for i in range(6)],
+    *[f'crcp_name_{i}'  for i in range(6)],
+    *[f'crcp_thick_{i}' for i in range(6)],
+    *[f'jpcp_ls'        for _ in range(1)],
+    *[f'crcp_ls'        for _ in range(1)],
+    *[f'jpcp_j'         for _ in range(1)],
+    *[f'crcp_j'         for _ in range(1)],
 }
 
 
