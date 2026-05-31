@@ -114,42 +114,109 @@ def _render_input(ss):
     if ss.cbr_values:
         _, n, u_cbr, u_pct, _ = calc_max_rank_percentile(ss.cbr_values)
         cbr_at_pct = interp_cbr(target_pct, u_pct, u_cbr)
-        mr_auto    = cbr_to_mr(cbr_at_pct)
-        k_auto     = mr_to_k(mr_auto)
 
-        st.markdown('<div class="card"><h4>🎯 ค่า CBR ที่ใช้ออกแบบ</h4>',
+        st.markdown('<div class="card"><h4>🎯 เลือก CBR ที่ใช้ออกแบบ</h4>',
                     unsafe_allow_html=True)
 
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.markdown(f'<div class="metric-box"><div class="val">{cbr_at_pct:.2f}</div>'
-                        f'<div class="lbl">CBR @ P{target_pct:.0f} (%)</div></div>',
-                        unsafe_allow_html=True)
-        with c2:
-            st.markdown(f'<div class="metric-box"><div class="val">{mr_auto:,.0f}</div>'
-                        f'<div class="lbl">Mr (psi)</div></div>',
-                        unsafe_allow_html=True)
-        with c3:
-            st.markdown(f'<div class="metric-box"><div class="val">{k_auto:.1f}</div>'
-                        f'<div class="lbl">k (pci)</div></div>',
-                        unsafe_allow_html=True)
+        # ── 3 ตัวเลือกอ้างอิง ──
+        st.markdown('**📌 ค่าอ้างอิง CBR:**')
 
-        design_cbr = st.number_input('CBR ที่ใช้ออกแบบจริง (ปรับได้)',
-                                      value=float(round(cbr_at_pct, 1)),
-                                      min_value=0.5, max_value=100.0, step=0.5,
-                                      key='design_cbr_input')
+        ref_cols = st.columns([3, 1])
+
+        # ① ดินเดิม P90
+        with ref_cols[0]:
+            st.markdown(
+                f'<div style="background:#E3F2FD;border:1px solid #90CAF9;border-radius:8px;'
+                f'padding:8px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">'
+                f'<span><b>① ดินเดิม</b> — CBR @ P{target_pct:.0f} = <b>{cbr_at_pct:.2f}%</b>'
+                f'<br><small style="color:#546E7A">Mr = {cbr_to_mr(cbr_at_pct):,.0f} psi</small></span>'
+                f'</div>',
+                unsafe_allow_html=True)
+        with ref_cols[1]:
+            if st.button('① เลือก', key='sel_cbr1', use_container_width=True):
+                for k in ('design_cbr_input',):
+                    if k in ss: del ss[k]
+                ss['_design_cbr_preset'] = round(cbr_at_pct, 1)
+                st.rerun()
+
+        # ② ดินถมในพื้นที่ — กรอกเอง
+        ref_cols2 = st.columns([2, 1, 1])
+        with ref_cols2[0]:
+            cbr_fill = st.number_input(
+                '② CBR ดินถมในพื้นที่ (%)',
+                value=float(ss.get('cbr_fill_input') or 10.0),
+                min_value=0.5, max_value=100.0, step=0.5,
+                key='cbr_fill_input')
+        with ref_cols2[1]:
+            st.markdown(f'<div style="padding-top:1.6rem;font-size:0.82rem;color:#546E7A">'
+                        f'Mr = {cbr_to_mr(cbr_fill):,.0f} psi</div>', unsafe_allow_html=True)
+        with ref_cols2[2]:
+            st.markdown('<div style="padding-top:1.3rem"></div>', unsafe_allow_html=True)
+            if st.button('② เลือก', key='sel_cbr2', use_container_width=True):
+                for k in ('design_cbr_input',):
+                    if k in ss: del ss[k]
+                ss['_design_cbr_preset'] = cbr_fill
+                st.rerun()
+
+        # ③ หลังปรับปรุงดินคันทาง (Odemark) — แสดงเฉพาะเมื่อคำนวณแล้ว
+        ode = ss.get('odemark_result')
+        if ss.get('improve_soil_check') and ode:
+            cbr_imp = ode.get('cbr_eq_design', int(ode.get('cbr_eq', 0)))
+            ref_cols3 = st.columns([3, 1])
+            with ref_cols3[0]:
+                st.markdown(
+                    f'<div style="background:#E8F5E9;border:1px solid #A5D6A7;border-radius:8px;'
+                    f'padding:8px 12px;margin-bottom:6px">'
+                    f'<b>③ หลังปรับปรุงดินคันทาง (Odemark)</b> — CBR_eq = <b>{cbr_imp}%</b>'
+                    f'<br><small style="color:#546E7A">Mr = {cbr_to_mr(cbr_imp):,.0f} psi</small>'
+                    f'</div>',
+                    unsafe_allow_html=True)
+            with ref_cols3[1]:
+                if st.button('③ เลือก', key='sel_cbr3', use_container_width=True):
+                    for k in ('design_cbr_input',):
+                        if k in ss: del ss[k]
+                    ss['_design_cbr_preset'] = float(cbr_imp)
+                    st.rerun()
+
+        st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
+        st.markdown('---')
+
+        # ── Input CBR ที่ใช้ออกแบบจริง ──
+        _preset = ss.get('_design_cbr_preset')
+        _default_cbr = float(_preset if _preset is not None else round(cbr_at_pct, 1))
+
+        design_cbr = st.number_input(
+            '✏️ CBR ที่ใช้ออกแบบ (กรอกหรือเลือกจากด้านบน)',
+            value=_default_cbr,
+            min_value=0.5, max_value=100.0, step=0.5,
+            key='design_cbr_input')
+
         mr_design = cbr_to_mr(design_cbr)
         k_design  = mr_to_k(mr_design)
-        st.markdown(f'<div class="result-info">'
-                    f'CBR = <b>{design_cbr:.1f}%</b> → Mr = <b>{mr_design:,.0f} psi</b>'
-                    f' → k = <b>{k_design:.1f} pci</b></div>',
-                    unsafe_allow_html=True)
+
+        # Warning ถ้ากรอกสูงกว่า P90
+        if design_cbr > cbr_at_pct * 1.2:
+            st.markdown(
+                f'<div class="result-warn">⚠️ CBR ที่กรอก ({design_cbr:.1f}%) สูงกว่า '
+                f'P{target_pct:.0f} ({cbr_at_pct:.2f}%) มากกว่า 20% — '
+                f'กรุณาตรวจสอบความถูกต้อง</div>',
+                unsafe_allow_html=True)
+
+        st.markdown(
+            f'<div class="result-info">'
+            f'CBR = <b>{design_cbr:.1f}%</b> → Mr = <b>{mr_design:,.0f} psi</b>'
+            f' → k = <b>{k_design:.1f} pci</b></div>',
+            unsafe_allow_html=True)
 
         if st.button('✅ ใช้ค่านี้', type='primary', key='use_cbr'):
-            ss.cbr_design      = design_cbr
-            ss.mr_subgrade_psi = mr_design
-            ss.k_subgrade_pci  = k_design
-            st.success('✅ บันทึกแล้ว → ใช้ได้ใน Flexible & Rigid Design')
+            ss.cbr_design       = design_cbr
+            ss.mr_subgrade_psi  = mr_design
+            ss.k_subgrade_pci   = k_design
+            ss['_cbr_synced_val'] = None  # reset sync flag เพื่อให้ tab3 รับค่าใหม่
+            # ล้าง widget key เพื่อให้ tab3 sync ได้
+            for k in ('cbr_fl_input', 'mr_fl_input'):
+                if k in ss: del ss[k]
+            st.success(f'✅ บันทึก CBR = {design_cbr:.1f}% → ใช้ได้ใน Flexible & Rigid Design')
 
         # สถิติ
         with st.expander('📋 สถิติ CBR', expanded=False):
@@ -269,7 +336,7 @@ def _render_odemark(ss):
         with cmr1:
             mr1_def = IMPROVE_MATERIALS.get(mat1, 100.0)
             mr1_mpa = st.number_input('MR (MPa)', 10.0, 1000.0,
-                                       float(ss.get('imp_mr1', mr1_def)),
+                                       float(ss.get('imp_mr1') or mr1_def),
                                        10.0, key='imp_mr1')
 
         # ชั้นที่ 2
@@ -362,7 +429,7 @@ def _render_export(ss):
 
     design_cbr_rpt = st.number_input(
         'CBR ที่ใช้ออกแบบในรายงาน (%)',
-        value=float(ss.get('cbr_design', 4.0)),
+        value=float(ss.get('cbr_design') or 4.0),
         min_value=0.5, max_value=100.0, step=0.5,
         key='cbr_design_rpt')
 
