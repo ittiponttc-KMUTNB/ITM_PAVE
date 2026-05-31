@@ -176,6 +176,9 @@ def _layers(prefix, n, defaults):
 # ─────────────────────────────────────────────
 
 def _kblock(prefix, layers, MR_psi):
+    from engine.rigid_nomograph import mr_from_cbr
+    ss = st.session_state
+
     od = calc_odemark([(l['thickness_cm'], l['E_MPa']) for l in layers])
     if od is None:
         st.warning('⚠️ กรุณากรอกความหนาและ E ให้ครบ')
@@ -186,7 +189,35 @@ def _kblock(prefix, layers, MR_psi):
     if warn:
         st.warning(warn)
 
-    res   = calc_composite_k(MR_psi, ESB_psi, float(DSB_used))
+    # ── Reference panel ──
+    _cbr1 = float(ss.get('cbr_p90') or ss.get('cbr_design') or 0) or None
+    _cbr2 = float(ss.get('cbr_fill') or 0) or None
+    _ode  = ss.get('odemark_result')
+    _cbr3 = float(_ode.get('cbr_eq_design', _ode.get('cbr_eq', 0))) if (
+                ss.get('improve_soil_check') and _ode) else None
+
+    refs = []
+    if _cbr1: refs.append(f'① P90={_cbr1:.2f}% → Mr={mr_from_cbr(_cbr1):,.0f} psi')
+    if _cbr2: refs.append(f'② ดินถม={_cbr2:.1f}% → Mr={mr_from_cbr(_cbr2):,.0f} psi')
+    if _cbr3: refs.append(f'③ ปรับปรุง={_cbr3:.0f}% → Mr={mr_from_cbr(_cbr3):,.0f} psi')
+    if refs:
+        st.markdown(
+            '<div style="background:#F8F9FA;border:1px solid #E0E0E0;border-radius:7px;'
+            'padding:6px 10px;margin-bottom:8px;font-size:0.8rem;color:#546E7A">'
+            '<b>📌 MR อ้างอิง:</b>  ' + '  |  '.join(refs) + '</div>',
+            unsafe_allow_html=True)
+
+    # ── MR subgrade input — default จาก TAB 3 ──
+    _mr_key     = f'{prefix}_mr_inp'
+    _mr_default = float(ss.get(_mr_key) or MR_psi or 7000.0)
+    MR_psi_use  = st.number_input(
+        'MR subgrade (psi)',
+        value=_mr_default,
+        min_value=500.0, max_value=50000.0, step=500.0,
+        key=_mr_key,
+        help='ค่าจาก TAB 3 Flexible Design — แก้ได้อิสระ')
+
+    res   = calc_composite_k(MR_psi_use, ESB_psi, float(DSB_used))
     k_inf = res['k_inf_pci']
 
     ls_val = st.number_input(
@@ -200,7 +231,7 @@ def _kblock(prefix, layers, MR_psi):
     _row('DSB (Odemark จริง)', f'{DSB_raw:.2f} in')
     _row('DSB (ใช้จริง)',      f'{DSB_used} in  ← nearest', hi=True)
     _row('ESB equivalent',     f'{ESB_psi:,.0f} psi')
-    _row('MR (subgrade)',       f'{MR_psi:,.0f} psi')
+    _row('MR (subgrade)',       f'{MR_psi_use:,.0f} psi', hi=True)
     st.markdown('<div style="height:4px"></div>', unsafe_allow_html=True)
 
     if ls_val <= 0:
@@ -247,7 +278,7 @@ def _kblock(prefix, layers, MR_psi):
             if st.button('🏗️ โครงสร้าง', key=f'bstr_{prefix}', use_container_width=True):
                 st.session_state[f'{prefix}_show_str'] = not st.session_state.get(f'{prefix}_show_str', False)
 
-    _graphs(prefix, MR_psi)
+    _graphs(prefix, MR_psi_use)
     return (k_inf, k_eff)
 
 
