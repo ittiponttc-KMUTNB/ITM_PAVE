@@ -226,14 +226,26 @@ def _kblock(prefix, layers, MR_psi):
             + ''.join(ref_badges) + '</div>',
             unsafe_allow_html=True)
 
-    # ── MR subgrade input — ใช้ key เดียวกันทั้ง JPCP และ CRCP (ถนนเส้นเดียวกัน) ──
-    _mr_default = float(ss.get('mr_subgrade_inp') or MR_psi or 7000.0)
-    MR_psi_use  = st.number_input(
-        'MR subgrade (psi)',
-        value=_mr_default,
-        min_value=500.0, max_value=50000.0, step=500.0,
-        key='mr_subgrade_inp',
-        help='ค่าจาก TAB 3 Flexible Design — ใช้ร่วมกันทั้ง JPCP และ CRCP')
+    # ── MR subgrade input — CRCP sync ตาม JPCP อัตโนมัติ (ถนนเส้นเดียวกัน) ──
+    if prefix == 'jpcp':
+        _mr_default = float(ss.get('jpcp_mr_inp') or MR_psi or 7000.0)
+        MR_psi_use  = st.number_input(
+            'MR subgrade (psi)',
+            value=_mr_default,
+            min_value=500.0, max_value=50000.0, step=500.0,
+            key='jpcp_mr_inp',
+            help='ค่าจาก TAB 3 — แก้ที่นี่ CRCP จะใช้ค่าเดียวกัน')
+        ss['_shared_mr_inp'] = MR_psi_use  # บันทึกให้ CRCP ใช้
+    else:
+        # CRCP ดึงค่าจาก JPCP เสมอ — แสดงให้ดูแต่ไม่ต้องกรอกซ้ำ
+        MR_psi_use = float(ss.get('_shared_mr_inp') or ss.get('jpcp_mr_inp') or MR_psi or 7000.0)
+        st.markdown(
+            f'<div style="background:#F0F4F8;border:1px solid #CBD5E1;border-radius:7px;'
+            f'padding:8px 12px;margin-bottom:8px;font-size:0.88rem">'
+            f'🔗 <b>MR subgrade = {MR_psi_use:,.0f} psi</b>'
+            f'<span style="color:#78909C;margin-left:8px">(ใช้ค่าเดียวกับ JPCP)</span>'
+            f'</div>',
+            unsafe_allow_html=True)
 
     res   = calc_composite_k(MR_psi_use, ESB_psi, float(DSB_used))
     k_inf = res['k_inf_pci']
