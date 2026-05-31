@@ -183,10 +183,16 @@ def render():
                 if st.button("📤 โหลดข้อมูลนี้", type="primary",
                               use_container_width=True, key="btn_load"):
                     loaded = 0
+                    # widget keys ที่ Streamlit จัดการเอง — ห้าม set โดยตรง
+                    _WIDGET_KEYS = {'project_name'}
                     for key in SAVE_KEYS:
-                        if key in data:
+                        if key in data and key not in _WIDGET_KEYS:
                             ss[key] = data[key]
                             loaded += 1
+                    # project_name — ใช้ st.session_state ผ่าน internal key
+                    if 'project_name' in data:
+                        # set ผ่าน key ที่ไม่ผูกกับ widget
+                        ss['_loaded_project_name'] = data['project_name']
 
                     # โหลด traffic_df กลับเป็น DataFrame
                     if 'traffic_df' in data and data['traffic_df']:
@@ -209,8 +215,9 @@ def render():
     with st.expander("🗑️ ล้างข้อมูลทั้งหมด", expanded=False):
         st.warning("⚠️ จะลบข้อมูลทั้งหมดในเซสชันนี้ — ไม่สามารถย้อนกลับได้")
         if st.button("🗑️ ล้างข้อมูลทั้งหมด", type="primary", key="btn_reset"):
+            _WIDGET_KEYS = {'project_name'}
             for key in SAVE_KEYS + ['traffic_df']:
-                if key in ss:
+                if key in ss and key not in _WIDGET_KEYS:
                     del ss[key]
             from ui.core import ss_init
             ss_init()
