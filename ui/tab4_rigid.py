@@ -709,7 +709,19 @@ def render():
         with p3d3:
             ptc1, ptc2 = st.columns([3, 2])
             with ptc1:
-                pt = st.number_input('Pt', 1.5, 3.5, float(ss.get('pt_global', 2.5)), 0.1, key='pt_rig_v7')
+                use_pt_global_rig = st.checkbox('ใช้ Pt Global',
+                                                 value=ss.get('use_pt_global_rig', True),
+                                                 key='use_pt_global_rig')
+                if use_pt_global_rig:
+                    pt = float(ss.get('pt_global', 2.5))
+                    st.markdown(
+                        _badge('Pt (Global)', f'{pt}', '🔒', bg='#E8F5E9', color='#1B5E20'),
+                        unsafe_allow_html=True
+                    )
+                else:
+                    pt = st.number_input('Pt', 1.5, 3.5,
+                                         float(ss.get('pt_rig_override', ss.get('pt_global', 2.5))),
+                                         0.1, key='pt_rig_override')
             dpsi = round(4.5 - pt, 2)
             with ptc2:
                 st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
