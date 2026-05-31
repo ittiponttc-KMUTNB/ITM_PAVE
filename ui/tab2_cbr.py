@@ -316,9 +316,31 @@ def _render_odemark(ss):
             st.markdown('---')
             st.markdown('#### ผลการคำนวณ')
             r1, r2, r3 = st.columns(3)
-            r1.metric('MR equivalent',              f"{res['mr_eq_mpa']:.2f} MPa")
-            r2.metric('CBR equivalent (คำนวณ)',     f"{res['cbr_eq']:.2f} %")
-            r3.metric('CBR equivalent (ใช้ออกแบบ)', f"{res.get('cbr_eq_design', math.floor(res['cbr_eq']))} %")
+            with r1:
+                st.markdown(
+                    f'<div style="background:#E8F5E9;border:1px solid #A5D6A7;border-radius:8px;'
+                    f'padding:10px 16px;text-align:center">'
+                    f'<div style="font-size:0.75rem;color:#546E7A;margin-bottom:4px">MR equivalent</div>'
+                    f'<div style="font-family:IBM Plex Mono,monospace;font-size:1.1rem;'
+                    f'font-weight:700;color:#1B5E20">{res["mr_eq_mpa"]:.2f} MPa</div>'
+                    f'</div>', unsafe_allow_html=True)
+            with r2:
+                st.markdown(
+                    f'<div style="background:#E8F5E9;border:1px solid #A5D6A7;border-radius:8px;'
+                    f'padding:10px 16px;text-align:center">'
+                    f'<div style="font-size:0.75rem;color:#546E7A;margin-bottom:4px">CBR equivalent (คำนวณ)</div>'
+                    f'<div style="font-family:IBM Plex Mono,monospace;font-size:1.1rem;'
+                    f'font-weight:700;color:#1B5E20">{res["cbr_eq"]:.2f} %</div>'
+                    f'</div>', unsafe_allow_html=True)
+            with r3:
+                st.markdown(
+                    f'<div style="background:#E8F5E9;border:1px solid #A5D6A7;border-radius:8px;'
+                    f'padding:10px 16px;text-align:center">'
+                    f'<div style="font-size:0.75rem;color:#546E7A;margin-bottom:4px">CBR equivalent (ใช้ออกแบบ)</div>'
+                    f'<div style="font-family:IBM Plex Mono,monospace;font-size:1.3rem;'
+                    f'font-weight:700;color:#1B5E20">{res.get("cbr_eq_design", math.floor(res["cbr_eq"]))} %</div>'
+                    f'</div>', unsafe_allow_html=True)
+            st.markdown('<div style="margin-top:8px"></div>', unsafe_allow_html=True)
             st.info(
                 f"**สรุป:** ใช้ CBR_eq = **{res.get('cbr_eq_design', math.floor(res['cbr_eq']))} %** "
                 f"แทนค่า CBR ดินเดิม ({ss.get('cbr_design', 0):.2f} %)")
