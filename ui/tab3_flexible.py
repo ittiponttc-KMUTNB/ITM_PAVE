@@ -498,9 +498,13 @@ def _design_check(ss, design_esal_f, r0_fl, so_fl, pi_fl, pt_fl2,
         'mr_psi':  mr_fl,
         'cbr':     cbr_fl,
     }
-    ss['r0_flex'] = r0_fl
-    ss['so_flex'] = so_fl
-    ss['pi_flex'] = pi_fl
+    ss['r0_flex']        = r0_fl
+    ss['so_flex']        = so_fl
+    ss['pi_flex']        = pi_fl
+    # ── ส่งค่าต่อไป TAB 4 ──
+    ss['cbr_design']      = cbr_fl
+    ss['mr_subgrade_psi'] = mr_fl
+    ss['k_subgrade_pci']  = mr_fl / 19.4
 
     if layer_results:
         st.dataframe(pd.DataFrame(layer_results),
