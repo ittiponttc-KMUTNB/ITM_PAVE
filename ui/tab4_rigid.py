@@ -678,7 +678,7 @@ def render():
         ec_psi = calc_ec(fc_cyl)
         with p3c2:
             st.markdown(
-                _badge("f'c Cube",     f'{fc_cube}',      'ksc', bg='#EEF2F7', color='#546E7A') +
+                _badge("f'c Cube",     f'{fc_cube}',      'ksc', bg='#E3F2FD', color='#0D47A1') +
                 _badge("f'c,cyl",      f'{fc_cyl:,.0f}',  'ksc', bg='#E3F2FD', color='#0D47A1') +
                 _badge('Ec',           f'{ec_psi:,.0f}',  'psi', bg='#E3F2FD', color='#0D47A1') +
                 _badge('Sc (ทล.lock)', f'{SC_FIXED:.0f}', 'psi', bg='#E8F5E9', color='#1B5E20'),
@@ -708,6 +708,11 @@ def render():
             so = st.number_input('So', 0.20, 0.50, ss.get('so_rig', 0.35), 0.01, key='so_rig')
         with p3d3:
             pt = st.number_input('Pt', 1.5, 3.5, float(ss.get('pt_global', 2.5)), 0.1, key='pt_rig_v7')
+            dpsi = round(4.5 - pt, 2)
+            st.markdown(
+                _badge('ΔPSI', f'{dpsi:.2f}', '= 4.5−Pt', bg='#EEF2F7', color='#546E7A'),
+                unsafe_allow_html=True
+            )
         with p3d4:
             st.markdown('<div style="font-size:0.8rem;color:#546E7A;margin-bottom:4px">Cd</div>',
                         unsafe_allow_html=True)
@@ -721,7 +726,7 @@ def render():
             cd_label = {1.0: 'ปกติ', 1.1: 'ดี', 1.2: 'ดีมาก'}.get(cd, '')
             st.markdown(
                 _badge('Cd (Drainage)', f'{cd:.1f} — {cd_label}', '',
-                       bg='#EEF2F7', color='#546E7A'),
+                       bg='#E3F2FD', color='#0D47A1'),
                 unsafe_allow_html=True
             )
 
