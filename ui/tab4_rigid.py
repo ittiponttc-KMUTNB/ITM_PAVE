@@ -235,9 +235,13 @@ def _kblock(prefix, layers, MR_psi):
             min_value=500.0, max_value=50000.0, step=500.0,
             key='jpcp_mr_inp',
             help='ค่าจาก TAB 3 — แก้ที่นี่ CRCP จะใช้ค่าเดียวกัน')
-        ss['_shared_mr_inp'] = MR_psi_use  # บันทึกให้ CRCP ใช้
+        ss['_shared_mr_inp'] = MR_psi_use
+        st.markdown(
+            f'<span style="background:#E3F2FD;color:#0D47A1;border-radius:6px;'
+            f'padding:3px 10px;font-size:0.82rem;font-weight:600">'
+            f'MR = {MR_psi_use:,.0f} psi</span>',
+            unsafe_allow_html=True)
     else:
-        # CRCP ดึงค่าจาก JPCP เสมอ — แสดงให้ดูแต่ไม่ต้องกรอกซ้ำ
         MR_psi_use = float(ss.get('_shared_mr_inp') or ss.get('jpcp_mr_inp') or MR_psi or 7000.0)
         st.markdown(
             f'<div style="background:#F0F4F8;border:1px solid #CBD5E1;border-radius:7px;'
@@ -255,6 +259,11 @@ def _kblock(prefix, layers, MR_psi):
         st.session_state.get(f'{prefix}_ls', 1.0), 0.5,
         key=f'{prefix}_ls', format='%.1f',
         help='LS=0: ไม่มี | LS=1: granular | LS=2-3: stabilized')
+    st.markdown(
+        f'<span style="background:#EEF2F7;color:#546E7A;border-radius:6px;'
+        f'padding:3px 10px;font-size:0.82rem;font-weight:600">'
+        f'LS = {ls_val:.1f}</span>',
+        unsafe_allow_html=True)
 
     k_eff = k_inf if ls_val <= 0 else apply_loss_of_support(k_inf, ls_val)
 
@@ -732,7 +741,7 @@ def render():
         with p3d4:
             cdl1, cdl2 = st.columns([3, 2])
             with cdl1:
-                st.markdown('<div style="font-size:0.8rem;color:#546E7A;margin-bottom:4px">Cd</div>',
+                st.markdown('<div style="font-size:0.8rem;color:#546E7A;margin-bottom:4px">Cd (Drain Coefficient)</div>',
                             unsafe_allow_html=True)
                 cd_str = st.radio('Cd', ['1.0', '1.1', '1.2'],
                                    index=[1.0,1.1,1.2].index(ss.get('cd_rig', 1.0)),
