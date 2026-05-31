@@ -19,8 +19,8 @@ def ss_init():
         'project_name':    '',
         # Traffic & ESAL
         'traffic_df':       None,
-        'esal_rigid':       {},
-        'esal_flex':        {},
+        'esal_rigid':       None,
+        'esal_flex':        None,
         'ldf':              0.9,
         'ddf':              0.5,
         'pt_global':        2.5,
@@ -29,25 +29,25 @@ def ss_init():
         '_pt_sync':         2.5,
         'sn_list':          [6.5, 7.1, 7.5, 8.0],
         # CBR
-        'cbr_values':       [],
+        'cbr_values':       None,
         'cbr_percentile':   90.0,
-        'cbr_design':       3.0,
-        'mr_subgrade_psi':  4500.0,
-        'k_subgrade_pci':   231.9,
+        'cbr_design':       None,
+        'mr_subgrade_psi':  None,
+        'k_subgrade_pci':   None,
         # Flexible
-        'flex_results':     {},
+        'flex_results':     None,
         'cbr_fl_val':       3.0,
         'mr_fl_val':        4500.0,
         # K-Value / Nomograph
-        'k_inf':            0.0,
-        'k_corrected':      0.0,
+        'k_inf':            None,
+        'k_corrected':      None,
         'ls_value':         1.0,
         'nomograph_img_k':  None,
         'nomograph_img_ls': None,
         'layer_esb_psi':    50000,
         'layer_dsb_in':     6.0,
         # Rigid
-        'rigid_results':    {},
+        'rigid_results':    None,
         # Navigation
         'current_page':     'ESAL Calculator',
     }
