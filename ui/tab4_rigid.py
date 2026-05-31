@@ -589,63 +589,136 @@ def render():
             )
 
     # ════════════════════════════════════════
-    #  Card 2 — W18 Input
+    #  Card 2 — W18 ออกแบบ (ยุบรวมใน Card 1 row ล่าง)
     # ════════════════════════════════════════
     with st.container(border=True):
         st.markdown('<div class="rp-card-title">🔢 W18 — ESAL ออกแบบ</div>',
                     unsafe_allow_html=True)
-        if w18_ref > 0:
-            use_manual = st.checkbox('กรอก W18 เองแทน', value=ss.get('w18_manual_mode', False),
-                                      key='w18_manual_mode')
-            if use_manual:
-                w18_req = st.number_input('W18 (ESALs)', min_value=100_000, max_value=500_000_000,
-                                           value=ss.get('w18_manual', w18_ref), step=100_000,
-                                           key='w18_manual', format='%d')
-            else:
-                w18_req = w18_ref
-                st.markdown(f'<div class="result-pass">✅ ใช้ W18 = <b>{w18_req:,.0f}</b> จาก ESAL Calculator (D=30 cm)</div>',
-                            unsafe_allow_html=True)
+        if esal_rigid:
+            # มี ESAL data → เลือก D + optional manual override
+            w2a, w2b = st.columns([2, 3])
+            with w2a:
+                d_opts   = sorted([int(k) for k in esal_rigid.keys()])
+                d_def    = ss.get('w18_d_sel', 30) if ss.get('w18_d_sel', 30) in d_opts else d_opts[-1]
+                d_sel    = st.selectbox(
+                    'ใช้ W18 จาก D =',
+                    d_opts,
+                    index=d_opts.index(d_def),
+                    key='w18_d_sel',
+                    format_func=lambda x: f'{x} cm ({round(x/2.54)} in)'
+                )
+                w18_from_esal = int(esal_rigid.get(d_sel, esal_rigid.get(str(d_sel), 0)))
+            with w2b:
+                use_manual = st.checkbox(
+                    'กรอก W18 เองแทน (Assume)',
+                    value=ss.get('w18_manual_mode', False),
+                    key='w18_manual_mode'
+                )
+                if use_manual:
+                    w18_req = st.number_input(
+                        'W18 (ESALs)',
+                        min_value=100_000, max_value=500_000_000,
+                        value=ss.get('w18_manual', w18_from_esal),
+                        step=100_000, key='w18_manual', format='%d'
+                    )
+                else:
+                    w18_req = w18_from_esal
+                    st.markdown(
+                        f'<span style="background:#E8F5E9;color:#1B5E20;border-radius:6px;'
+                        f'padding:4px 12px;font-size:0.85rem;font-weight:600">'
+                        f'✅ W18 = {w18_req:,.0f} ESALs  (D={d_sel} cm)</span>',
+                        unsafe_allow_html=True
+                    )
         else:
-            st.session_state['w18_manual_mode'] = True
-            w18_req = st.number_input('W18 (ESALs) — กรอกเอง', min_value=100_000, max_value=500_000_000,
-                                       value=ss.get('w18_manual', 5_000_000), step=100_000,
-                                       key='w18_manual', format='%d')
+            # ไม่มี ESAL → กรอกเองอย่างเดียว
+            st.markdown(
+                '<span style="background:#FFF8E1;color:#E65100;border-radius:6px;'
+                'padding:3px 10px;font-size:0.82rem;font-weight:600">'
+                '⚠️ ยังไม่มีข้อมูล ESAL — กรอก W18 เองก่อน</span>',
+                unsafe_allow_html=True
+            )
+            w18_req = st.number_input(
+                'W18 (ESALs) — Assume',
+                min_value=100_000, max_value=500_000_000,
+                value=ss.get('w18_manual', 5_000_000),
+                step=100_000, key='w18_manual', format='%d'
+            )
 
     # ════════════════════════════════════════
-    #  Card 3 — Shared Parameters
+    #  Card 3 — Shared Parameters (จัดใหม่)
     # ════════════════════════════════════════
+
+    def _badge(label, value, unit='', bg='#EEF2F7', color='#546E7A'):
+        """badge style เหมือน CBR reference ใน _kblock"""
+        return (
+            f'<div style="display:inline-block;background:{bg};border-radius:6px;'
+            f'padding:4px 12px;margin-right:6px;margin-bottom:4px;text-align:center">'
+            f'<div style="font-size:0.72rem;color:#90A4AE;margin-bottom:1px">{label}</div>'
+            f'<div style="font-family:IBM Plex Mono,monospace;font-size:0.88rem;'
+            f'font-weight:600;color:{color}">{value}'
+            f'<span style="font-size:0.7rem;font-weight:400;margin-left:3px;color:#90A4AE">{unit}</span>'
+            f'</div></div>'
+        )
+
     with st.container(border=True):
         st.markdown('<div class="rp-card-title">⚙️ พารามิเตอร์ร่วม (JPCP & CRCP)</div>',
                     unsafe_allow_html=True)
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
+
+        # ── แถว 1: วัสดุคอนกรีต ──
+        st.markdown('<div style="font-size:0.72rem;color:#90A4AE;font-weight:600;'
+                    'letter-spacing:0.05em;margin-bottom:6px">🧱 วัสดุคอนกรีต</div>',
+                    unsafe_allow_html=True)
+        p3c1, p3c2 = st.columns([1, 3])
+        with p3c1:
             fc_cube = st.number_input("f'c Cube (ksc)", 280, 600,
                                        ss.get('fc_cube', 350), step=10, key='fc_cube')
             if fc_cube < 350:
                 st.warning('⚠️ ต่ำกว่า 350 ksc')
         fc_cyl = convert_cube_to_cyl(fc_cube)
         ec_psi = calc_ec(fc_cyl)
-        with c2:
-            _mbox("f'c,cyl / Ec", f'{ec_psi:,.0f}', 'psi', _JPCP_BD, _JPCP_BG)
-        with c3:
-            _mbox('Sc (ทล. lock)', f'{SC_FIXED:.0f}', 'psi', _CRCP_BD, _CRCP_BG)
-        with c4:
-            r0_val = st.selectbox('Reliability R0 (%)', [85, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99],
+        with p3c2:
+            st.markdown(
+                _badge("f'c,cyl", f'{fc_cyl:,.0f}', 'ksc',  bg='#E3F2FD', color='#0D47A1') +
+                _badge('Ec',      f'{ec_psi:,.0f}', 'psi',  bg='#E3F2FD', color='#0D47A1') +
+                _badge('Sc (ทล.lock)', f'{SC_FIXED:.0f}', 'psi', bg='#E8F5E9', color='#1B5E20'),
+                unsafe_allow_html=True
+            )
+
+        st.markdown('<hr style="border:none;border-top:1px solid #E0E0E0;margin:8px 0">', unsafe_allow_html=True)
+
+        # ── แถว 2: พารามิเตอร์ออกแบบ ──
+        st.markdown('<div style="font-size:0.72rem;color:#90A4AE;font-weight:600;'
+                    'letter-spacing:0.05em;margin-bottom:6px">📐 พารามิเตอร์ออกแบบ</div>',
+                    unsafe_allow_html=True)
+        p3d1, p3d2, p3d3, p3d4, p3d5 = st.columns([1, 1, 1, 1, 2])
+        with p3d1:
+            r0_val = st.selectbox('R0 (%)', [85,90,91,92,93,94,95,96,97,98,99],
                                    index=1, key='r0_rig')
             zr = get_zr(r0_val)
-            st.caption(f'ZR = {zr:.3f}')
-
-        c5, c6, c7 = st.columns(3)
-        with c5:
+            st.markdown(
+                _badge('ZR', f'{zr:.3f}', '', bg='#EEF2F7', color='#546E7A'),
+                unsafe_allow_html=True
+            )
+        with p3d2:
             so = st.number_input('So', 0.20, 0.50, ss.get('so_rig', 0.35), 0.01, key='so_rig')
-        with c6:
+        with p3d3:
             pt = st.number_input('Pt', 1.5, 3.5, float(ss.get('pt_global', 2.5)), 0.1, key='pt_rig_v7')
-        with c7:
-            cd_str = st.radio('Cd', ['1.0 — ปกติ', '1.1 — ดี', '1.2 — ดีมาก'],
+        with p3d4:
+            st.markdown('<div style="font-size:0.8rem;color:#546E7A;margin-bottom:4px">Cd</div>',
+                        unsafe_allow_html=True)
+            cd_str = st.radio('Cd', ['1.0', '1.1', '1.2'],
                                index=[1.0,1.1,1.2].index(ss.get('cd_rig', 1.0)),
-                               key='cd_rig_radio', horizontal=True, label_visibility='collapsed')
-            cd = float(cd_str.split(' — ')[0])
+                               key='cd_rig_radio', horizontal=True,
+                               label_visibility='collapsed')
+            cd = float(cd_str)
             st.session_state['cd_rig'] = cd
+        with p3d5:
+            cd_label = {1.0: 'ปกติ', 1.1: 'ดี', 1.2: 'ดีมาก'}.get(cd, '')
+            st.markdown(
+                _badge('Cd (Drainage)', f'{cd:.1f} — {cd_label}', '',
+                       bg='#EEF2F7', color='#546E7A'),
+                unsafe_allow_html=True
+            )
 
     # ════════════════════════════════════════
     #  Section A — Layers + k∞ (2 คอลัมน์)
