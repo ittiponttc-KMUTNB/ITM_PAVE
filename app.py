@@ -63,7 +63,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 CBR Analysis",
     "🔧 Flexible Design",
     "🏗️ Rigid Design",
-    "📄 Report & Save",
+    "💾 Project Save/Load",
 ])
 
 with tab1:
