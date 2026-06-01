@@ -112,6 +112,7 @@ def _get_survey_fig_num(rs: dict) -> str:
 
 
 
+def _increment_tbl(base, offset):
     s = base.strip()
     for pattern in [r'^(\d+\.\d+)-(\d+)$', r'^(\d+)-(\d+)$']:
         m = re.match(pattern, s)
