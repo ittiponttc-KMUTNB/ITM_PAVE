@@ -121,14 +121,19 @@ def _eq_para(doc, text, indent_cm=2.0, bold=False, italic=True):
 
 
 def _short_mat(name):
-    """ตัดชื่อวัสดุให้สั้นลง"""
+    """แปลงชื่อวัสดุสำหรับแสดงในตารางสรุปโครงสร้าง"""
     m = {
-        'ผิวทางแอสฟัลต์คอนกรีต (AC)':                         'AC Surface',
-        'หินคลุกปรับปรุงคุณภาพด้วยปูนซีเมนต์ (CTB)':         'CTB',
-        'หินคลุก CBR 80%':                                    'Crushed Rock CBR 80%',
-        'รองพื้นทางวัสดุมวลรวม CBR 25%':                     'Granular Subbase CBR 25%',
-        'วัสดุคัดเลือก ก':                                    'Select Material A',
-        'ดินถมคันทาง CBR กรอกเอง':                           'Earth Embankment',
+        'ผิวทางแอสฟัลต์คอนกรีต (AC)':                        'ผิวทางแอสฟัลต์คอนกรีต',
+        'ผิวทางลาดยาง PMA':                                   'ผิวทางลาดยาง PMA',
+        '(CTB) หินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc':   'ซีเมนต์ CTB UCS 40 ksc',
+        'หินคลุกผสมซีเมนต์ UCS 24.5 ksc':                    'ซีเมนต์ CTB UCS 24.5 ksc',
+        'ดินซีเมนต์ UCS 17.5 ksc':                            'ดินซีเมนต์ UCS 17.5 ksc',
+        'หินคลุก CBR 80%':                                    'หินคลุก CBR ≥ 80%',
+        'วัสดุมวลรวม CBR 25%':                                'รองพื้นทางวัสดุมวลรวม CBR ≥ 25%',
+        'รองพื้นทางวัสดุมวลรวม CBR 25%':                     'รองพื้นทางวัสดุมวลรวม CBR ≥ 25%',
+        'วัสดุหมุนเวียน (Recycling)':                         'วัสดุหมุนเวียน (Recycling)',
+        'วัสดุคัดเลือก ก':                                    'วัสดุคัดเลือก ก',
+        'ดินถมคันทาง CBR กรอกเอง':                            'ดินถมคันทาง',
     }
     for k, v in m.items():
         if k in name:
@@ -149,10 +154,20 @@ def _summary_table(doc, layers, cbr_design, fig_bytes=None):
     for l in layers:
         mat  = l.get('material', '')
         h_cm = l.get('h_cm', 0)
-        if mat == 'ดินถมคันทาง CBR กรอกเอง':
-            mat = f'Earth Embankment CBR ≥ {cbr_design:.1f} %'
-        data_rows.append((_short_mat(mat), str(int(h_cm))))
-    data_rows.append((f'Earth Embankment / Subgrade\nCBR ≥ {cbr_design:.1f} %', 'Existing'))
+        sub  = l.get('sub')   # {'wear': x, 'bind': x, 'base': x} ถ้าเลือกแยกชั้น AC
+        if sub and sub.get('wear', 0) + sub.get('bind', 0) + sub.get('base', 0) > 0:
+            # แตก AC เป็น 3 ชั้นย่อย
+            if sub.get('wear', 0) > 0:
+                data_rows.append(('Wearing Course', str(int(sub['wear']))))
+            if sub.get('bind', 0) > 0:
+                data_rows.append(('Binder Course',  str(int(sub['bind']))))
+            if sub.get('base', 0) > 0:
+                data_rows.append(('Base Course',    str(int(sub['base']))))
+        elif mat == 'ดินถมคันทาง CBR กรอกเอง':
+            data_rows.append((f'ดินถมคันทาง CBR ≥ {cbr_design:.1f} %', str(int(h_cm))))
+        else:
+            data_rows.append((_short_mat(mat), str(int(h_cm))))
+    data_rows.append((f'ดินคันทาง CBR ≥ {cbr_design:.1f} %', 'เดิม'))
 
     # insert figure via temp paragraph
     drawing_el = None
