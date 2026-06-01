@@ -449,23 +449,25 @@ def build_flexible_report(ss: dict) -> bytes | None:
     p_cap_mat.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _run(p_cap_mat, f'ตารางที่ {tbl_mat}  {cap_mat}', bold=True)
 
-    mat_tbl = doc.add_table(rows=1, cols=5)
+    mat_tbl = doc.add_table(rows=1, cols=6)
     mat_tbl.style = 'Table Grid'
     mat_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
-    for j, h in enumerate(['ชั้น', 'วัสดุ', 'a\u1D62', 'm\u1D62', 'M\u1D63 (psi)']):
+    for j, h in enumerate(['ชั้นที่', 'วัสดุ', 'aᵢ', 'mᵢ', 'Mᵣ (psi)', 'E (MPa)']):
         _tbl_cell(mat_tbl.rows[0].cells[j], h, bold=True, fill=HDR)
 
     for i, layer in enumerate(layers):
         mat   = layer.get('material', '')
         ai    = float(layer.get('ai', 0))
         mi    = float(layer.get('mi', 1.0))
-        mr_l  = float(layer.get('mr_psi', mr_psi) if 'mr_psi' in layer else mr_psi)
+        mr_l  = float(layer.get('mr_psi', 0)) if layer.get('mr_psi') else mr_psi
         row   = mat_tbl.add_row()
+        e_mpa = round(mr_l / 145.038) if mr_l > 0 else 0
         _tbl_cell(row.cells[0], str(i+1))
         _tbl_cell(row.cells[1], _short_mat(mat), align=WD_ALIGN_PARAGRAPH.LEFT)
         _tbl_cell(row.cells[2], f'{ai:.2f}')
         _tbl_cell(row.cells[3], f'{mi:.2f}')
         _tbl_cell(row.cells[4], f'{mr_l:,.0f}')
+        _tbl_cell(row.cells[5], f'{e_mpa:,}')
 
     doc.add_paragraph()
 
