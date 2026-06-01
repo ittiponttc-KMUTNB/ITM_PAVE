@@ -159,35 +159,51 @@ def render():
             ss['cbr_fl_val'] = max(0.5,   float(ss.get('cbr_fl_val') or 3.0))
             ss['mr_fl_val']  = max(500.0, float(ss.get('mr_fl_val') or 4500.0))
 
-            c1, c2 = st.columns(2)
-            with c1:
-                st.number_input(
-                    "CBR (%)", value=ss['cbr_fl_val'],
-                    step=0.5, min_value=0.5,
-                    key="cbr_fl_input", on_change=_on_cbr_fl_change,
-                )
-                cbr_fl = ss['cbr_fl_val']
-            with c2:
-                st.number_input(
-                    "Mr (psi)",
-                    value=ss['mr_fl_val'],
-                    step=500.0, min_value=500.0,
-                    key="mr_fl_input", on_change=_on_mr_fl_change,
-                )
-                mr_fl = ss['mr_fl_val']
+            # ── เลือก input mode ──
+            subgrade_mode = st.radio(
+                'กำหนดค่าจาก',
+                ['CBR (%)', 'Mr (psi)'],
+                horizontal=True,
+                key='subgrade_mode_fl'
+            )
 
-            # Warning ถ้ากรอกสูงกว่า P90
+            if subgrade_mode == 'CBR (%)':
+                sc1, sc2 = st.columns([2, 3])
+                with sc1:
+                    st.number_input(
+                        'CBR (%)', value=ss['cbr_fl_val'],
+                        step=0.5, min_value=0.5,
+                        key='cbr_fl_input', on_change=_on_cbr_fl_change)
+                    cbr_fl = ss['cbr_fl_val']
+                    mr_fl  = ss['mr_fl_val']
+                with sc2:
+                    st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
+                    st.markdown(
+                        _badge('Mr (derived)', f'{mr_fl:,.0f}', 'psi', bg='#E3F2FD', color='#0D47A1') +
+                        _badge('Mr', f'{mr_fl/145.038:.1f}', 'MPa', bg='#EEF2F7', color='#546E7A'),
+                        unsafe_allow_html=True)
+            else:
+                sc1, sc2 = st.columns([2, 3])
+                with sc1:
+                    st.number_input(
+                        'Mr (psi)', value=ss['mr_fl_val'],
+                        step=500.0, min_value=500.0,
+                        key='mr_fl_input', on_change=_on_mr_fl_change)
+                    mr_fl  = ss['mr_fl_val']
+                    cbr_fl = ss['cbr_fl_val']
+                with sc2:
+                    st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
+                    st.markdown(
+                        _badge('CBR (derived)', f'{cbr_fl:.2f}', '%', bg='#E8F5E9', color='#1B5E20') +
+                        _badge('Mr', f'{mr_fl/145.038:.1f}', 'MPa', bg='#EEF2F7', color='#546E7A'),
+                        unsafe_allow_html=True)
+
+            # Warning ถ้า CBR สูงกว่า P90
             if _cbr1 and cbr_fl > _cbr1 * 1.2:
                 st.markdown(
                     f'<div class="result-warn">⚠️ CBR ({cbr_fl:.1f}%) สูงกว่า '
                     f'ดินเดิม P90 ({_cbr1:.2f}%) มากกว่า 20%</div>',
                     unsafe_allow_html=True)
-
-            st.markdown(
-                _badge('Mr', f'{mr_fl:,.0f}', 'psi', bg='#E3F2FD', color='#0D47A1') +
-                _badge('Mr', f'{mr_fl/145.038:.1f}', 'MPa', bg='#EEF2F7', color='#546E7A'),
-                unsafe_allow_html=True
-            )
 
         # ── Design Parameters ──
         with st.container(border=True):
