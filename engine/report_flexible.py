@@ -606,7 +606,10 @@ def build_flexible_report(ss: dict) -> bytes | None:
 
     p_cap_sum = _para(doc, space_before=4)
     p_cap_sum.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    _run(p_cap_sum, f'ตารางที่ {tbl_sn}  {cap_sn}', bold=True, underline=True)
+    import re as _re
+    _m = _re.match(r'^(.*?)(\d+)$', str(tbl_sn).strip())
+    tbl_sum = f"{_m.group(1)}{int(_m.group(2))+1}" if _m else f"{tbl_sn}+1"
+    _run(p_cap_sum, f'ตารางที่ {tbl_sum}  สรุปโครงสร้างชั้นทางที่ออกแบบ', bold=True, underline=True)
 
     _summary_table(doc, layers, cbr, fig_bytes=fig_bytes)
 
