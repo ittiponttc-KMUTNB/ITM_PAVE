@@ -10,7 +10,7 @@ import math
 from datetime import datetime
 
 from docx import Document as DocxDoc
-from docx.shared import Pt, Cm
+from docx.shared import Pt, Cm, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import nsdecls, qn
@@ -94,7 +94,24 @@ def _calc_esal_table(traffic_df, ptype, pt, param, ldf, ddf):
     return rows, int(round(acc_esal))
 
 
-def _increment_tbl(base, offset):
+def _increment_sec(sec_str: str, offset: int) -> str:
+    """เพิ่ม/ลด เลขท้ายสุดของ section number เช่น '3.2.2' + (-1) → '3.2.1'"""
+    s = sec_str.strip()
+    m = re.match(r'^(.*\.)(\d+)$', s)
+    if m:
+        return f"{m.group(1)}{int(m.group(2)) + offset}"
+    return sec_str
+
+
+def _get_survey_fig_num(rs: dict) -> str:
+    """สร้างเลขรูป survey จาก chapter prefix เช่น flex_section_number='3.2.2' → '3-1'"""
+    flex_sec = rs.get('flex_section_number', '4.2.2')
+    m = re.match(r'^(\d+)\.', flex_sec)
+    ch = m.group(1) if m else '3'
+    return f'{ch}-1'
+
+
+
     s = base.strip()
     for pattern in [r'^(\d+\.\d+)-(\d+)$', r'^(\d+)-(\d+)$']:
         m = re.match(pattern, s)
@@ -578,6 +595,64 @@ def build_esal_report(ss: dict) -> bytes | None:
     p_date.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _run(p_date, f"วันที่: {datetime.now().strftime('%d/%m/%Y %H:%M')}", sz=13)
     doc.add_page_break()
+
+    # ── Section 3.2.1 การสำรวจและวิเคราะห์ปริมาณการจราจร ──
+    survey_section_num = rs.get('survey_section_number',
+                                _increment_sec(rs.get('flex_section_number', '4.2.2'), -1))
+    h_survey = doc.add_paragraph()
+    h_survey.paragraph_format.space_after = Pt(6)
+    _run(h_survey, f"{survey_section_num}\t", bold=True)
+    _run(h_survey, "การสำรวจและวิเคราะห์ปริมาณการจราจร", bold=True)
+
+    p_survey = doc.add_paragraph()
+    p_survey.paragraph_format.first_line_indent = Cm(1.25)
+    p_survey.paragraph_format.space_after = Pt(6)
+    _thai_justify(p_survey)
+    survey_text = rs.get('survey_intro_text',
+        'จากรายงานสำรวจและคาดการณ์ปริมาณจราจรและวิเคราะห์ระดับการให้บริการเบื้องต้น '
+        'ได้ตรวจวัดปริมาณจราจร ตรมตำแหน่งต่างๆ โดยรอบโครงการ '
+        f'ดังแสดงในรูปที่ {rs.get("survey_fig_number", _get_survey_fig_num(rs))}')
+    _run(p_survey, survey_text)
+
+    # รูปแผนที่สำรวจ
+    survey_fig_num = rs.get('survey_fig_number', _get_survey_fig_num(rs))
+    survey_img     = rs.get('survey_map_img')   # bytes หรือ None
+    if survey_img:
+        doc.add_paragraph()
+        p_img           = doc.add_paragraph()
+        p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r_img           = p_img.add_run()
+        try:
+            r_img.add_picture(io.BytesIO(survey_img), width=Cm(14))
+        except Exception:
+            pass
+    else:
+        # placeholder ถ้าไม่มีรูป
+        p_ph           = doc.add_paragraph()
+        p_ph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        ph_box = p_ph.add_run(
+            f'[ แทรกรูปที่ {survey_fig_num}  แสดงตำแหน่งสำรวจปริมาณจราจร ]')
+        ph_box.font.name  = FN
+        ph_box.font.size  = Pt(FS)
+        ph_box.font.color.rgb = RGBColor(0xC0, 0x00, 0x00)
+        ph_box.font.italic    = True
+
+    # caption รูป
+    p_cap           = doc.add_paragraph()
+    p_cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_cap.paragraph_format.space_before = Pt(4)
+    p_cap.paragraph_format.space_after  = Pt(10)
+    r_cap = p_cap.add_run(
+        f'รูปที่ {survey_fig_num}  แสดงตำแหน่งสำรวจปริมาณจราจร')
+    r_cap.font.name   = FN
+    r_cap.font.size   = Pt(TFS)
+    r_cap.font.italic = True
+    try:
+        r_cap._element.rPr.rFonts.set(qn('w:eastAsia'), FN)
+    except Exception:
+        pass
+
+    doc.add_paragraph()
 
     # ── Flexible section ──
     if ss.get('esal_flex'):
