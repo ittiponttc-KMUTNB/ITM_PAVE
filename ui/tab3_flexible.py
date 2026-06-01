@@ -370,6 +370,7 @@ def render():
                                 'h_cm': h_total, 'ai': ai, 'mi': mi_f,
                                 'sni': round(sn_i, 3), 'cum_sn': round(cum_sn, 3),
                                 'sub': {'wear': h_wear, 'bind': h_bind, 'base': h_base},
+                                'mr_psi': mr_psi_layer,
                             })
                             _sn_req_str = f' | SN_req={_sn_req_i:.3f}' if _sn_req_i > 0 else ''
                             st.markdown(
@@ -498,6 +499,7 @@ def render():
                                     'h_cm': h_total, 'ai': ai, 'mi': mi_f,
                                     'sni': round(sn_i, 3), 'cum_sn': round(cum_sn, 3),
                                     'sub': {'wear': h_wear, 'bind': h_bind, 'base': h_base},
+                                    'mr_psi': mr_psi_layer,
                                 })
                                 _sn_req_str = f' | SN_req={_sn_req_i:.3f}' if _sn_req_i > 0 else ''
                                 st.markdown(
@@ -567,6 +569,7 @@ def _render_layer_result(st_obj, li, mat_f, h_f, ai, mi_f, mr_psi_layer,
         'layer': li+1, 'material': mat_f,
         'h_cm': h_f, 'ai': ai, 'mi': mi_f,
         'sni': round(sn_i, 3), 'cum_sn': round(new_cum, 3),
+        'mr_psi': mr_psi_layer,
     })
     _sn_req_str = f' | SN_req={_sn_req_i:.3f}' if _sn_req_i > 0 else ''
     st_obj.markdown(
