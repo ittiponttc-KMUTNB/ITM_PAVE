@@ -116,7 +116,193 @@ def _make_serializable(obj):
             return None
 
 
-def render():
+
+# ─────────────────────────────────────────────
+#  Combined Report Helpers
+# ─────────────────────────────────────────────
+
+def _make_combined_settings(chapter: int) -> dict:
+    """
+    สร้าง report_settings ทุกส่วนจาก chapter number เดียว
+    ตรงกับโครงสร้างรายงานจริง:
+      N.2   ESAL  (Flex: N.2.2 / ตาราง N-1→N-4,  Rigid: N.2.3 / ตาราง N-5→N-7)
+      N.3   CBR   (ตาราง N-7,  รูป N-7)
+      N.4   Flexible (ตาราง N-8, N-9, N-10,  รูป N-8)
+      N.5   Rigid   (รูป N-4→N-8)
+    """
+    c = str(chapter)
+    return {
+        'esal': {
+            'flex_section_number':  f'{c}.2.2',
+            'rigid_section_number': f'{c}.2.3',
+            'flex_table_start':     f'{c}-1',
+            'rigid_table_start':    f'{c}-5',
+        },
+        'cbr': {
+            'section_number': f'{c}.3',
+            'table_number':   f'{c}-7',
+            'figure_number':  f'{c}-7',
+        },
+        'flex': {
+            'section_number':  f'{c}.4',
+            'table_inputs':    f'{c}-8',
+            'table_materials': f'{c}-9',
+            'table_sn':        f'{c}-10',
+            'figure_number':   f'{c}-8',
+        },
+        'rigid': {
+            'section_number': f'{c}.5',
+            'figure_prefix':  f'{c}-',
+            'figure_start':   4,
+            'inc_summary':    True,
+        },
+    }
+
+
+def _merge_docx_bytes(master_doc, sub_bytes: bytes):
+    """Append เนื้อหาจาก sub_bytes เข้า master_doc"""
+    from docx import Document as DocxDoc
+    import copy
+    sub_doc = DocxDoc(io.BytesIO(sub_bytes))
+    for elem in sub_doc.element.body:
+        master_doc.element.body.append(copy.deepcopy(elem))
+
+
+def _generate_combined_report(ss, chapter: int):
+    """
+    เรียก builder ทุกส่วนตามข้อมูลที่มี แล้ว merge เป็นไฟล์เดียว
+    ผลลัพธ์เก็บใน ss['_combined_report_bytes']
+    """
+    import copy
+    from docx import Document as DocxDoc
+    from docx.shared import Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml.ns import qn
+    from datetime import datetime
+
+    settings = _make_combined_settings(chapter)
+    proj     = ss.get('project_name', '') or 'โครงการ'
+    errors   = []
+    sections_built = []
+
+    # ── สร้าง master document ──
+    master = DocxDoc()
+    style  = master.styles['Normal']
+    style.font.name = 'TH SarabunPSK'
+    style.font.size = Pt(15)
+    try:
+        style._element.rPr.rFonts.set(qn('w:eastAsia'), 'TH SarabunPSK')
+    except Exception:
+        pass
+
+    def _run(para, text, bold=False, size=15, color=None):
+        r = para.add_run(text)
+        r.font.name = 'TH SarabunPSK'
+        r.font.size = Pt(size)
+        r.font.bold = bold
+        if color:
+            r.font.color.rgb = color
+        try:
+            r._element.rPr.rFonts.set(qn('w:eastAsia'), 'TH SarabunPSK')
+        except Exception:
+            pass
+
+    # ── Cover page ──
+    p1 = master.add_paragraph()
+    p1.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(p1, "รายการคำนวณออกแบบโครงสร้างชั้นทาง", bold=True, size=20)
+
+    p2 = master.add_paragraph()
+    p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(p2, "ตามวิธี AASHTO 1993 Guide for Design of Pavement Structures", size=15)
+
+    p3 = master.add_paragraph()
+    p3.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(p3, f"โครงการ: {proj}", bold=True, size=15,
+         color=RGBColor(0x00, 0x47, 0xAB))
+
+    p4 = master.add_paragraph()
+    p4.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _run(p4,
+         f"บทที่ {chapter}  |  "
+         f"วันที่: {datetime.now().strftime('%d/%m/%Y %H:%M')}  |  "
+         "พัฒนาโดย รศ.ดร.อิทธิพล มีผล  |  ภาควิชาครุศาสตร์โยธา มจพ.",
+         size=12, color=RGBColor(80, 80, 80))
+
+    master.add_page_break()
+
+    # ── 1. ESAL ──
+    if ss.get('traffic_df') is not None:
+        try:
+            from engine.report_esal import build_esal_report
+            ss_esal = dict(ss)
+            esal_settings = dict(settings['esal'])
+            esal_settings['survey_map_img'] = ss.get('_survey_map_img')  # bytes หรือ None
+            ss_esal['report_settings'] = esal_settings
+            b = build_esal_report(ss_esal)
+            if b:
+                _merge_docx_bytes(master, b)
+                master.add_page_break()
+                sections_built.append('🚛 ESAL')
+        except Exception as e:
+            errors.append(f'ESAL: {e}')
+
+    # ── 2. CBR ──
+    if ss.get('cbr_values'):
+        try:
+            from engine.report_cbr import build_cbr_report
+            ss_cbr = dict(ss)
+            ss_cbr.update(settings['cbr'])
+            b = build_cbr_report(ss_cbr)
+            if b:
+                _merge_docx_bytes(master, b)
+                master.add_page_break()
+                sections_built.append('📊 CBR')
+        except Exception as e:
+            errors.append(f'CBR: {e}')
+
+    # ── 3. Flexible ──
+    if ss.get('flex_results'):
+        try:
+            from engine.report_flexible import build_flexible_report
+            ss_flex = dict(ss)
+            ss_flex['report_settings'] = settings['flex']
+            b = build_flexible_report(ss_flex)
+            if b:
+                _merge_docx_bytes(master, b)
+                master.add_page_break()
+                sections_built.append('🔧 Flexible')
+        except Exception as e:
+            errors.append(f'Flexible: {e}')
+
+    # ── 4. Rigid ──
+    if ss.get('rigid_results'):
+        try:
+            from engine.report_rigid import build_rigid_report
+            ss_rigid = dict(ss)
+            ss_rigid['report_settings'] = settings['rigid']
+            b = build_rigid_report(ss_rigid)
+            if b:
+                _merge_docx_bytes(master, b)
+                sections_built.append('🏗️ Rigid')
+        except Exception as e:
+            errors.append(f'Rigid: {e}')
+
+    # ── บันทึก bytes ──
+    buf = io.BytesIO()
+    master.save(buf)
+    buf.seek(0)
+    ss['_combined_report_bytes'] = buf.read()
+
+    # ── แสดงผล ──
+    if sections_built:
+        st.success(f"✅ สร้างรายงานรวมสำเร็จ — {len(sections_built)} ส่วน: {' | '.join(sections_built)}")
+    if errors:
+        for err in errors:
+            st.warning(f"⚠️ ข้ามส่วน {err}")
+
+
+
     ss = st.session_state
     st.markdown("### 💾 Project Save / Load")
     st.markdown("บันทึกและโหลดข้อมูลโปรเจกต์ทั้งหมดเป็นไฟล์ JSON")
@@ -262,6 +448,107 @@ def render():
             ss_init()
             st.success("✅ ล้างข้อมูลแล้ว")
             st.rerun()
+
+    # ════════════════════════════════
+    #  COMBINED REPORT
+    # ════════════════════════════════
+    st.markdown("---")
+    st.markdown("#### 📄 สร้างรายงานรวม (Combined Report)")
+    st.markdown("รวมทุกส่วนที่คำนวณแล้วเป็นไฟล์ Word เดียว โดยอัตโนมัติ")
+
+    with st.container(border=True):
+
+        # ── แสดงสถานะข้อมูลที่มี ──
+        st.markdown("**ข้อมูลที่พร้อมใช้:**")
+        report_items = [
+            ('traffic_df',    '🚛 ESAL'),
+            ('cbr_values',    '📊 CBR'),
+            ('flex_results',  '🔧 Flexible Pavement'),
+            ('rigid_results', '🏗️ Rigid Pavement'),
+        ]
+        has_any = False
+        cols_status = st.columns(4)
+        for ci, (key, label) in enumerate(report_items):
+            val = ss.get(key)
+            has = val is not None and val != {} and val != []
+            if has:
+                has_any = True
+            with cols_status[ci]:
+                if has:
+                    st.success(label, icon="✅")
+                else:
+                    st.caption(f"— {label}")
+
+        st.markdown("")
+
+        # ── Upload รูปแผนที่สำรวจจราจร ──
+        st.markdown("**🗺️ รูปแผนที่ตำแหน่งสำรวจจราจร** *(สำหรับ section N.2.1)*")
+        col_up, col_prev = st.columns([2, 1])
+        with col_up:
+            survey_img_file = st.file_uploader(
+                f"Upload รูปที่ N-1 (PNG / JPG)",
+                type=['png', 'jpg', 'jpeg'],
+                key="survey_map_uploader",
+                help="รูปแผนที่แสดงตำแหน่งสำรวจปริมาณจราจร — แต่ละโครงการต่างกัน"
+            )
+            if survey_img_file is not None:
+                ss['_survey_map_img'] = survey_img_file.read()
+                st.success("✅ โหลดรูปแล้ว — จะแทรกในรายงาน section N.2.1")
+            elif ss.get('_survey_map_img'):
+                st.info("📌 ใช้รูปที่ upload ไว้ก่อนหน้า")
+            else:
+                st.caption("⚠️ ไม่มีรูป — จะแทรก placeholder แดงแทน (แก้ใน Word ภายหลัง)")
+        with col_prev:
+            if ss.get('_survey_map_img'):
+                st.image(ss['_survey_map_img'], caption="Preview", use_container_width=True)
+
+        st.markdown("")
+
+        # ── Chapter input ──
+        col_ch, col_preview = st.columns([1, 2])
+        with col_ch:
+            chapter = st.number_input(
+                "บทที่ (Chapter)",
+                min_value=1, max_value=9,
+                value=int(ss.get('_combined_chapter', 3)),
+                step=1,
+                key="combined_chapter_input",
+                help="เลขบทในรายงานจริง เช่น บทที่ 3 → หัวข้อ 3.2, 3.3, 3.4, 3.5"
+            )
+            ss['_combined_chapter'] = chapter
+
+        with col_preview:
+            c = str(chapter)
+            st.markdown(f"""
+**Preview หัวข้อ/ตาราง/รูป (บทที่ {chapter}):**
+
+| ส่วน | Section | ตาราง | รูป |
+|---|---|---|---|
+| ESAL Flex | {c}.2.2 | {c}-1 → {c}-4 | {c}-1 |
+| ESAL Rigid | {c}.2.3 | {c}-5 → {c}-7 | — |
+| CBR | {c}.3 | {c}-7 | {c}-7 |
+| Flexible | {c}.4 | {c}-8, {c}-9, {c}-10 | {c}-8 |
+| Rigid | {c}.5 | — | {c}-4 → {c}-8 |
+""")
+
+        # ── ปุ่ม Generate ──
+        if not has_any:
+            st.warning("⚠️ ยังไม่มีข้อมูลการคำนวณ — กรุณาคำนวณอย่างน้อย 1 ส่วนก่อน")
+        else:
+            if st.button("📄 สร้างรายงานรวม", type="primary",
+                          use_container_width=True, key="btn_combined_report"):
+                _generate_combined_report(ss, chapter)
+
+        if ss.get('_combined_report_bytes'):
+            proj  = ss.get('project_name', '') or 'Report'
+            fname = f"Combined_Report_Ch{chapter}_{proj}.docx"
+            st.download_button(
+                "📥 Download รายงานรวม (.docx)",
+                data=ss['_combined_report_bytes'],
+                file_name=fname,
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True,
+                key="dl_combined_report")
 
     # Footer
     st.markdown("---")
