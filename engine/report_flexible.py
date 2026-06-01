@@ -125,12 +125,11 @@ def _short_mat(name):
     m = {
         'ผิวทางแอสฟัลต์คอนกรีต (AC)':                        'ผิวทางแอสฟัลต์คอนกรีต',
         'ผิวทางลาดยาง PMA':                                   'ผิวทางลาดยาง PMA',
-        '(CTB) หินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc':   'ซีเมนต์ CTB UCS 40 ksc',
-        'หินคลุกผสมซีเมนต์ UCS 24.5 ksc':                    'ซีเมนต์ CTB UCS 24.5 ksc',
+        '(CTB) หินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc':   'หินคลุกปรับปรุงด้วยปูนซีเมนต์ (CTB) UCS ≥ 40 ksc',
+        'หินคลุกผสมซีเมนต์ UCS 24.5 ksc':                    'หินคลุกผสมซีเมนต์ UCS ≥ 24.5 ksc',
         'ดินซีเมนต์ UCS 17.5 ksc':                            'ดินซีเมนต์ UCS 17.5 ksc',
         'หินคลุก CBR 80%':                                    'หินคลุก CBR ≥ 80%',
-        'วัสดุมวลรวม CBR 25%':                                'รองพื้นทางวัสดุมวลรวม CBR ≥ 25%',
-        'รองพื้นทางวัสดุมวลรวม CBR 25%':                     'รองพื้นทางวัสดุมวลรวม CBR ≥ 25%',
+        'วัสดุมวลรวม CBR 25%':                                'วัสดุมวลรวม CBR ≥ 25%',
         'วัสดุหมุนเวียน (Recycling)':                         'วัสดุหมุนเวียน (Recycling)',
         'วัสดุคัดเลือก ก':                                    'วัสดุคัดเลือก ก',
         'ดินถมคันทาง CBR กรอกเอง':                            'ดินถมคันทาง',
@@ -164,10 +163,10 @@ def _summary_table(doc, layers, cbr_design, fig_bytes=None):
             if sub.get('base', 0) > 0:
                 data_rows.append(('Base Course',    str(int(sub['base']))))
         elif mat == 'ดินถมคันทาง CBR กรอกเอง':
-            data_rows.append((f'ดินถมคันทาง CBR ≥ {cbr_design:.1f} %', str(int(h_cm))))
+            data_rows.append((f'ดินคันทางเดิม/ดินถม CBR ≥ {cbr_design:.1f} %', str(int(h_cm))))
         else:
             data_rows.append((_short_mat(mat), str(int(h_cm))))
-    data_rows.append((f'ดินคันทาง CBR ≥ {cbr_design:.1f} %', 'เดิม'))
+    data_rows.append((f'ดินคันทางเดิม/ดินถม CBR ≥ {cbr_design:.1f} %', 'Existing'))
 
     # insert figure via temp paragraph
     drawing_el = None
