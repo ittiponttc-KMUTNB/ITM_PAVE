@@ -302,7 +302,7 @@ def _generate_combined_report(ss, chapter: int):
             st.warning(f"⚠️ ข้ามส่วน {err}")
 
 
-
+def render():
     ss = st.session_state
     st.markdown("### 💾 Project Save / Load")
     st.markdown("บันทึกและโหลดข้อมูลโปรเจกต์ทั้งหมดเป็นไฟล์ JSON")
