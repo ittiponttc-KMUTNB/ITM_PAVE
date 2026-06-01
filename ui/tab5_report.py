@@ -302,6 +302,16 @@ def _generate_combined_report(ss, chapter: int):
             st.warning(f"⚠️ ข้ามส่วน {err}")
 
 
+def _has_data(val) -> bool:
+    """เช็คว่า session state value มีข้อมูลจริง รองรับ DataFrame ด้วย"""
+    if val is None:
+        return False
+    try:
+        return len(val) > 0
+    except TypeError:
+        return bool(val)
+
+
 def render():
     ss = st.session_state
     st.markdown("### 💾 Project Save / Load")
@@ -329,7 +339,7 @@ def render():
             ]
             for key, label in items:
                 val = ss.get(key)
-                has = val is not None and val != {} and val != []
+                has = _has_data(val)
                 icon = '✅' if has else '—'
                 color = '#2E7D32' if has else '#9E9E9E'
                 st.markdown(
@@ -470,7 +480,7 @@ def render():
         cols_status = st.columns(4)
         for ci, (key, label) in enumerate(report_items):
             val = ss.get(key)
-            has = val is not None and val != {} and val != []
+            has = _has_data(val)
             if has:
                 has_any = True
             with cols_status[ci]:
