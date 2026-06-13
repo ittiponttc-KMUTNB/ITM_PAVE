@@ -75,7 +75,7 @@ def build_rigid_report(ss: dict) -> bytes | None:
         return None
 
     rr = ss.get('rigid_results', {})
-    has_j = bool(rr.get('JPCP') or rr.get('jpcp'))
+    has_j = bool(rr.get('JPCP/JRCP') or rr.get('JPCP') or rr.get('jpcp'))
     has_c = bool(rr.get('CRCP') or rr.get('crcp'))
     if not has_j and not has_c:
         return None
