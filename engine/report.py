@@ -686,10 +686,10 @@ def build_report_full(ss: dict) -> bytes | None:
     # จึงไม่ต้องแยกออกมาเป็น section ต่างหาก
     # lazy import — กันพังตอน startup (เหมือน figures/matplotlib)
     from docxcompose.composer import Composer
-    from report_esal     import build_esal_report
-    from report_cbr      import build_cbr_report
-    from report_flexible import build_flexible_report
-    from report_rigid    import build_rigid_report
+    from engine.report_esal     import build_esal_report
+    from engine.report_cbr      import build_cbr_report
+    from engine.report_flexible import build_flexible_report
+    from engine.report_rigid    import build_rigid_report
 
     sections = [
         ('esal_rigid',    build_esal_report),
