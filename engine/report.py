@@ -677,15 +677,25 @@ def build_report_full(ss: dict) -> bytes | None:
     # ใช้ docxcompose.Composer แทนการ append XML element ดิบ
     # เพื่อให้รูปภาพ (relationships ใน document.xml.rels) ถูก copy
     # ตามไปด้วยอย่างถูกต้อง — แก้ปัญหารูปหายในรายงานรวม
+    #
+    # เรียก builder "ตัวเต็ม" จากไฟล์ report ย่อยโดยตรง (ตัวเดียวกับที่
+    # รายงานเดี่ยวใช้) แทน build_report_* เวอร์ชันย่อใน report.py ที่
+    # generate รูปผ่าน engine.figures (ซึ่ง import ไม่สำเร็จ ทำให้รูปหาย)
+    # ผลลัพธ์: รายงานรวมได้เนื้อหา + รูป เหมือนรายงานเดี่ยวทุกประการ
+    # หมายเหตุ: section K-value รวมอยู่ใน build_rigid_report แล้ว
+    # จึงไม่ต้องแยกออกมาเป็น section ต่างหาก
     # lazy import — กันพังตอน startup (เหมือน figures/matplotlib)
     from docxcompose.composer import Composer
+    from report_esal     import build_esal_report
+    from report_cbr      import build_cbr_report
+    from report_flexible import build_flexible_report
+    from report_rigid    import build_rigid_report
 
     sections = [
-        ('esal_rigid',    build_report_esal),
-        ('cbr_values',    build_report_cbr),
-        ('flex_results',  build_report_flexible),
-        ('k_corrected',   build_report_kvalue),
-        ('rigid_results', build_report_rigid),
+        ('esal_rigid',    build_esal_report),
+        ('cbr_values',    build_cbr_report),
+        ('flex_results',  build_flexible_report),
+        ('rigid_results', build_rigid_report),
     ]
 
     composer = Composer(doc)
