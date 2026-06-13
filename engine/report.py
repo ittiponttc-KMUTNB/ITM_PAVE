@@ -674,6 +674,12 @@ def build_report_full(ss: dict) -> bytes | None:
     doc.add_page_break()
 
     # ── Merge sections ──
+    # ใช้ docxcompose.Composer แทนการ append XML element ดิบ
+    # เพื่อให้รูปภาพ (relationships ใน document.xml.rels) ถูก copy
+    # ตามไปด้วยอย่างถูกต้อง — แก้ปัญหารูปหายในรายงานรวม
+    # lazy import — กันพังตอน startup (เหมือน figures/matplotlib)
+    from docxcompose.composer import Composer
+
     sections = [
         ('esal_rigid',    build_report_esal),
         ('cbr_values',    build_report_cbr),
@@ -682,14 +688,23 @@ def build_report_full(ss: dict) -> bytes | None:
         ('rigid_results', build_report_rigid),
     ]
 
+    composer = Composer(doc)
+    _first = True
     for key, fn in sections:
         if ss.get(key):
             sub_bytes = fn(ss)
             if sub_bytes:
+                # ขึ้นหน้าใหม่ก่อนแต่ละ section (section แรกมี page break
+                # จาก cover อยู่แล้ว จึงข้ามไป)
+                if not _first:
+                    doc.add_page_break()
                 sub_doc = DocxDoc(io.BytesIO(sub_bytes))
-                for elem in sub_doc.element.body:
-                    doc.element.body.append(elem)
-                doc.add_page_break()
+                composer.append(sub_doc)
+                _first = False
 
     _add_footer(doc)
-    return _doc_to_bytes(doc)
+
+    out = io.BytesIO()
+    composer.save(out)
+    out.seek(0)
+    return out.read()
