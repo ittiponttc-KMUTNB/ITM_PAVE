@@ -159,13 +159,19 @@ def _make_combined_settings(chapter: int) -> dict:
     }
 
 
-def _merge_docx_bytes(master_doc, sub_bytes: bytes):
-    """Append เนื้อหาจาก sub_bytes เข้า master_doc"""
+def _merge_docx_bytes(composer, sub_bytes: bytes):
+    """
+    Append เนื้อหาจาก sub_bytes เข้า master ผ่าน docxcompose.Composer
+
+    ใช้ Composer.append() แทนการ copy XML element ดิบ
+    (master_doc.element.body.append) เพราะวิธีดิบจะไม่ copy
+    relationship ของรูปภาพ (rId ใน document.xml.rels) ตามไปด้วย
+    ทำให้รูปในรายงานรวมหาย ("The picture can't be displayed")
+    docxcompose จะ remap relationship + copy ไฟล์รูปให้ครบถูกต้อง
+    """
     from docx import Document as DocxDoc
-    import copy
     sub_doc = DocxDoc(io.BytesIO(sub_bytes))
-    for elem in sub_doc.element.body:
-        master_doc.element.body.append(copy.deepcopy(elem))
+    composer.append(sub_doc)
 
 
 def _generate_combined_report(ss, chapter: int):
@@ -231,6 +237,11 @@ def _generate_combined_report(ss, chapter: int):
 
     master.add_page_break()
 
+    # ── สร้าง Composer สำหรับ merge ทุก section (รูปไม่หาย) ──
+    # lazy import — กันพังตอน startup
+    from docxcompose.composer import Composer
+    composer = Composer(master)
+
     # ── 1. ESAL ──
     if ss.get('traffic_df') is not None:
         try:
@@ -241,7 +252,7 @@ def _generate_combined_report(ss, chapter: int):
             ss_esal['report_settings'] = esal_settings
             b = build_esal_report(ss_esal)
             if b:
-                _merge_docx_bytes(master, b)
+                _merge_docx_bytes(composer, b)
                 master.add_page_break()
                 sections_built.append('🚛 ESAL')
         except Exception as e:
@@ -255,7 +266,7 @@ def _generate_combined_report(ss, chapter: int):
             ss_cbr.update(settings['cbr'])
             b = build_cbr_report(ss_cbr)
             if b:
-                _merge_docx_bytes(master, b)
+                _merge_docx_bytes(composer, b)
                 master.add_page_break()
                 sections_built.append('📊 CBR')
         except Exception as e:
@@ -269,7 +280,7 @@ def _generate_combined_report(ss, chapter: int):
             ss_flex['report_settings'] = settings['flex']
             b = build_flexible_report(ss_flex)
             if b:
-                _merge_docx_bytes(master, b)
+                _merge_docx_bytes(composer, b)
                 master.add_page_break()
                 sections_built.append('🔧 Flexible')
         except Exception as e:
@@ -283,14 +294,14 @@ def _generate_combined_report(ss, chapter: int):
             ss_rigid['report_settings'] = settings['rigid']
             b = build_rigid_report(ss_rigid)
             if b:
-                _merge_docx_bytes(master, b)
+                _merge_docx_bytes(composer, b)
                 sections_built.append('🏗️ Rigid')
         except Exception as e:
             errors.append(f'Rigid: {e}')
 
     # ── บันทึก bytes ──
     buf = io.BytesIO()
-    master.save(buf)
+    composer.save(buf)
     buf.seek(0)
     ss['_combined_report_bytes'] = buf.read()
 
