@@ -57,7 +57,7 @@ def _run(para, text, bold=False, sz=FS, italic=False, color=None, underline=Fals
     return r
 
 
-def _eq_run(para, text, sz=11, bold=False, italic=True):
+def _eq_run(para, text, sz=10, bold=False, italic=True):
     r = para.add_run(text)
     r.font.name = EQ; r.font.size = Pt(sz)
     r.bold = bold; r.italic = italic
@@ -448,7 +448,7 @@ def build_flexible_report(ss: dict) -> bytes | None:
         mr_l  = float(layer.get('mr_psi', mr_psi) if 'mr_psi' in layer else mr_psi)
         row   = mat_tbl.add_row()
         _tbl_cell(row.cells[0], str(i+1))
-        _tbl_cell(row.cells[1], _short_mat(mat), align=WD_ALIGN_PARAGRAPH.LEFT)
+        _tbl_cell(row.cells[1], mat, align=WD_ALIGN_PARAGRAPH.LEFT)
         _tbl_cell(row.cells[2], f'{ai:.2f}')
         _tbl_cell(row.cells[3], f'{mi:.2f}')
         _tbl_cell(row.cells[4], f'{mr_l:,.0f}')
@@ -545,7 +545,7 @@ def build_flexible_report(ss: dict) -> bytes | None:
         _run(p_sn_hdr, 'การคำนวณ SN:', bold=True)
         p_sn_from = _para(doc, indent_cm=2.0, space_after=2)
         _run(p_sn_from, 'จากสมการ ', sz=FS)
-        _eq_run(p_sn_from, 'AASHTO 1993', italic=True, sz=FS)
+        _eq_run(p_sn_from, 'AASHTO 1993', italic=True, sz=10)
         _run(p_sn_from, ':  ', sz=FS)
         _run(p_sn_from, f'SN_{li} = {sn_req_i:.2f}', bold=True, sz=FS)
 
