@@ -151,7 +151,7 @@ def _summary_table(doc, layers, cbr_design, fig_bytes=None):
         h_cm = l.get('h_cm', 0)
         if mat == 'ดินถมคันทาง CBR กรอกเอง':
             mat = f'Earth Embankment CBR ≥ {cbr_design:.1f} %'
-        data_rows.append((_short_mat(mat), str(int(h_cm))))
+        data_rows.append((mat, str(int(h_cm))))
     data_rows.append((f'Earth Embankment / Subgrade\nCBR ≥ {cbr_design:.1f} %', 'Existing'))
 
     # insert figure via temp paragraph
