@@ -57,7 +57,7 @@ def _run(para, text, bold=False, sz=FS, italic=False, color=None, underline=Fals
     return r
 
 
-def _eq_run(para, text, sz=10, bold=False, italic=True):
+def _eq_run(para, text, sz=11, bold=False, italic=True):  # Times New Roman 11pt
     r = para.add_run(text)
     r.font.name = EQ; r.font.size = Pt(sz)
     r.bold = bold; r.italic = italic
@@ -448,7 +448,7 @@ def build_flexible_report(ss: dict) -> bytes | None:
         mr_l  = float(layer.get('mr_psi', mr_psi) if 'mr_psi' in layer else mr_psi)
         row   = mat_tbl.add_row()
         _tbl_cell(row.cells[0], str(i+1))
-        _tbl_cell(row.cells[1], mat, align=WD_ALIGN_PARAGRAPH.LEFT)
+        _tbl_cell(row.cells[1], _short_mat(mat), align=WD_ALIGN_PARAGRAPH.LEFT)
         _tbl_cell(row.cells[2], f'{ai:.2f}')
         _tbl_cell(row.cells[3], f'{mi:.2f}')
         _tbl_cell(row.cells[4], f'{mr_l:,.0f}')
@@ -477,7 +477,7 @@ def build_flexible_report(ss: dict) -> bytes | None:
 
         doc.add_paragraph()
         hdr_p = _para(doc, indent_cm=1.0, space_before=6)
-        _run(hdr_p, f'ชั้นที่ {li}: {mat}', bold=True, underline=True)
+        _run(hdr_p, f'ชั้นที่ {li}: {_short_mat(mat)}', bold=True, underline=True)
 
         p_mat2 = _para(doc, indent_cm=1.5)
         _run(p_mat2, 'ข้อมูลวัสดุ:', bold=True)
@@ -544,7 +544,7 @@ def build_flexible_report(ss: dict) -> bytes | None:
         sni   = float(layer.get('sni',  ai * h_in * mi))
         cum2 += sni
         row   = sn_tbl2.add_row()
-        vals  = [str(i+1), layer.get('material',''),
+        vals  = [str(i+1), _short_mat(layer.get('material','')),
                  f'{ai:.2f}', f'{mi:.2f}', f'{h_in:.2f}',
                  f'{h_cm:.0f}', f'{sni:.3f}', f'{cum2:.3f}']
         for j, val in enumerate(vals):
@@ -561,12 +561,15 @@ def build_flexible_report(ss: dict) -> bytes | None:
     p_chk_cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _run(p_chk_cap, 'ผลการตรวจสอบการออกแบบ', bold=True)
 
-    chk_tbl = doc.add_table(rows=4, cols=2)
+    chk_tbl = doc.add_table(rows=5, cols=2)
     chk_tbl.style = 'Table Grid'
     chk_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    ratio = sn_prov / sn_req if sn_req > 0 else 0.0
+    ratio_pass = ratio >= 1.0
     for i, (param, value) in enumerate([
         ('SN Required (จากสมการ AASHTO)', f'{sn_req:.3f}'),
         ('SN Provided (จากชั้นทาง)',       f'{sn_prov:.3f}'),
+        ('Ratio (SN Provided / SN Required)', f'{ratio:.3f}  ≥ 1.00  ✓' if ratio_pass else f'{ratio:.3f}  < 1.00  ✗'),
         ('Safety Margin',                  f'{sn_prov - sn_req:+.3f}'),
         ('ผลการตรวจสอบ',                   'ผ่าน (OK)' if passed else 'ไม่ผ่าน (NG)'),
     ]):
@@ -576,8 +579,10 @@ def build_flexible_report(ss: dict) -> bytes | None:
             p.alignment = WD_ALIGN_PARAGRAPH.LEFT if j == 0 else WD_ALIGN_PARAGRAPH.CENTER
             r = p.add_run(val)
             r.font.name = FN; r.font.size = Pt(FS)
-            r.bold = (i == 3)
-            if i == 3:
+            r.bold = (i in (2, 4))
+            if i == 2:
+                r.font.color.rgb = GREEN if ratio_pass else RED
+            if i == 4:
                 r.font.color.rgb = GREEN if passed else RED
             try:
                 r._element.rPr.rFonts.set(qn('w:cs'), FN)
