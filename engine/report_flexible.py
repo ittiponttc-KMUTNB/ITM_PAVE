@@ -529,7 +529,7 @@ def build_flexible_report(ss: dict) -> bytes | None:
 
         doc.add_paragraph()
         hdr_p = _para(doc, indent_cm=1.0, space_before=6)
-        _run(hdr_p, f'ชั้นที่ {li}: {_short_mat(mat)}', bold=True, underline=True)
+        _run(hdr_p, f'ชั้นที่ {li}: {mat}', bold=True, underline=True)
 
         # ── ข้อมูลวัสดุ ──
         p_mat2 = _para(doc, indent_cm=1.5, space_after=2)
@@ -553,9 +553,7 @@ def build_flexible_report(ss: dict) -> bytes | None:
         p_dmin_hdr = _para(doc, indent_cm=1.5, space_before=4, space_after=2)
         _run(p_dmin_hdr, 'การคำนวณความหนาขั้นต่ำ:', bold=True)
         _eq_para(doc,
-            f'D_{li}  \u2265  SN_{li} / (a_{li} \u00d7 m_{li})'
-            f'  =  {sn_req_i:.2f} / ({ai:.2f} \u00d7 {mi:.2f})'
-            f'  =  {d_min_in:.2f} in  ({d_min_cm:.1f} cm)',
+            f'D_{li}  \u2265  SN_{li} / (a_{li} \u00d7 m_{li})',
             indent_cm=2.5, italic=True)
 
         # ── เลือกใช้ความหนา ──
