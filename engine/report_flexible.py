@@ -121,18 +121,14 @@ def _eq_para(doc, text, indent_cm=2.0, bold=False, italic=True):
 
 
 def _short_mat(name):
-    """แปลงชื่อวัสดุสำหรับแสดงในตารางสรุปโครงสร้าง"""
+    """ตัดชื่อวัสดุให้สั้นลง"""
     m = {
-        'ผิวทางแอสฟัลต์คอนกรีต (AC)':                        'ผิวทางแอสฟัลต์คอนกรีต',
-        'ผิวทางลาดยาง PMA':                                   'ผิวทางลาดยาง PMA',
-        '(CTB) หินคลุกปรับปรุงด้วยปูนซีเมนต์ UCS 40 ksc':   'หินคลุกปรับปรุงด้วยปูนซีเมนต์ (CTB) UCS ≥ 40 ksc',
-        'หินคลุกผสมซีเมนต์ UCS 24.5 ksc':                    'หินคลุกผสมซีเมนต์ UCS ≥ 24.5 ksc',
-        'ดินซีเมนต์ UCS 17.5 ksc':                            'ดินซีเมนต์ UCS 17.5 ksc',
-        'หินคลุก CBR 80%':                                    'หินคลุก CBR ≥ 80%',
-        'วัสดุมวลรวม CBR 25%':                                'วัสดุมวลรวม CBR ≥ 25%',
-        'วัสดุหมุนเวียน (Recycling)':                         'วัสดุหมุนเวียน (Recycling)',
-        'วัสดุคัดเลือก ก':                                    'วัสดุคัดเลือก ก',
-        'ดินถมคันทาง CBR กรอกเอง':                            'ดินถมคันทาง',
+        'ผิวทางแอสฟัลต์คอนกรีต (AC)':                         'AC Surface',
+        'หินคลุกปรับปรุงคุณภาพด้วยปูนซีเมนต์ (CTB)':         'CTB',
+        'หินคลุก CBR 80%':                                    'Crushed Rock CBR 80%',
+        'รองพื้นทางวัสดุมวลรวม CBR 25%':                     'Granular Subbase CBR 25%',
+        'วัสดุคัดเลือก ก':                                    'Select Material A',
+        'ดินถมคันทาง CBR กรอกเอง':                           'Earth Embankment',
     }
     for k, v in m.items():
         if k in name:
@@ -153,20 +149,10 @@ def _summary_table(doc, layers, cbr_design, fig_bytes=None):
     for l in layers:
         mat  = l.get('material', '')
         h_cm = l.get('h_cm', 0)
-        sub  = l.get('sub')   # {'wear': x, 'bind': x, 'base': x} ถ้าเลือกแยกชั้น AC
-        if sub and sub.get('wear', 0) + sub.get('bind', 0) + sub.get('base', 0) > 0:
-            # แตก AC เป็น 3 ชั้นย่อย
-            if sub.get('wear', 0) > 0:
-                data_rows.append(('Wearing Course', str(int(sub['wear']))))
-            if sub.get('bind', 0) > 0:
-                data_rows.append(('Binder Course',  str(int(sub['bind']))))
-            if sub.get('base', 0) > 0:
-                data_rows.append(('Base Course',    str(int(sub['base']))))
-        elif mat == 'ดินถมคันทาง CBR กรอกเอง':
-            data_rows.append((f'ดินคันทางเดิม/ดินถม CBR ≥ {cbr_design:.1f} %', str(int(h_cm))))
-        else:
-            data_rows.append((_short_mat(mat), str(int(h_cm))))
-    data_rows.append((f'ดินคันทางเดิม/ดินถม CBR ≥ {cbr_design:.1f} %', 'Existing'))
+        if mat == 'ดินถมคันทาง CBR กรอกเอง':
+            mat = f'Earth Embankment CBR ≥ {cbr_design:.1f} %'
+        data_rows.append((_short_mat(mat), str(int(h_cm))))
+    data_rows.append((f'Earth Embankment / Subgrade\nCBR ≥ {cbr_design:.1f} %', 'Existing'))
 
     # insert figure via temp paragraph
     drawing_el = None
@@ -449,25 +435,23 @@ def build_flexible_report(ss: dict) -> bytes | None:
     p_cap_mat.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _run(p_cap_mat, f'ตารางที่ {tbl_mat}  {cap_mat}', bold=True)
 
-    mat_tbl = doc.add_table(rows=1, cols=6)
+    mat_tbl = doc.add_table(rows=1, cols=5)
     mat_tbl.style = 'Table Grid'
     mat_tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
-    for j, h in enumerate(['ชั้นที่', 'วัสดุ', 'aᵢ', 'mᵢ', 'Mᵣ (psi)', 'E (MPa)']):
+    for j, h in enumerate(['ชั้น', 'วัสดุ', 'a\u1D62', 'm\u1D62', 'M\u1D63 (psi)']):
         _tbl_cell(mat_tbl.rows[0].cells[j], h, bold=True, fill=HDR)
 
     for i, layer in enumerate(layers):
         mat   = layer.get('material', '')
         ai    = float(layer.get('ai', 0))
         mi    = float(layer.get('mi', 1.0))
-        mr_l  = float(layer.get('mr_psi', 0)) if layer.get('mr_psi') else mr_psi
+        mr_l  = float(layer.get('mr_psi', mr_psi) if 'mr_psi' in layer else mr_psi)
         row   = mat_tbl.add_row()
-        e_mpa = round(mr_l / 145.038) if mr_l > 0 else 0
         _tbl_cell(row.cells[0], str(i+1))
         _tbl_cell(row.cells[1], _short_mat(mat), align=WD_ALIGN_PARAGRAPH.LEFT)
         _tbl_cell(row.cells[2], f'{ai:.2f}')
         _tbl_cell(row.cells[3], f'{mi:.2f}')
         _tbl_cell(row.cells[4], f'{mr_l:,.0f}')
-        _tbl_cell(row.cells[5], f'{e_mpa:,}')
 
     doc.add_paragraph()
 
@@ -480,41 +464,121 @@ def build_flexible_report(ss: dict) -> bytes | None:
     _run(p_calc, 'การคำนวณความหนาขั้นต่ำของแต่ละชั้น ใช้หลักการว่า Structural Number (SN) ที่จุดใด ๆ '
          'ต้องมากกว่าหรือเท่ากับ SN ที่ต้องการ โดยคำนวณจากค่า M\u1D63 ของชั้นถัดไป')
 
+    # helper: คำนวณ SN_req สำหรับ Mr ที่กำหนด (ใช้ AASHTO 1993 iterative)
+    def _sn_req_for_mr(mr_val):
+        """คำนวณ SN required จาก AASHTO 1993 สำหรับ Mr ที่กำหนด"""
+        if not mr_val or mr_val <= 0 or W18 <= 0:
+            return 0.0
+        try:
+            # Newton-Raphson / bisection เหมือนใน design.py
+            def _lhs(sn):
+                try:
+                    dpsi = pi - pt
+                    val = (zr * so
+                           + 9.36 * math.log10(sn + 1) - 0.20
+                           + math.log10(dpsi / 2.7) / (0.4 + 1094 / (sn + 1) ** 5.19)
+                           + 2.32 * math.log10(mr_val) - 8.07)
+                    return val
+                except Exception:
+                    return 0.0
+            target = math.log10(W18)
+            lo, hi = 0.5, 20.0
+            for _ in range(80):
+                mid = (lo + hi) / 2.0
+                if _lhs(mid) >= target:
+                    hi = mid
+                else:
+                    lo = mid
+            return round((lo + hi) / 2.0, 3)
+        except Exception:
+            return 0.0
+
     cum_sn = 0.0
-    for layer in layers:
+    for idx, layer in enumerate(layers):
+        li    = idx + 1
         mat   = layer.get('material', '')
         h_cm  = float(layer.get('h_cm', 0))
         h_in  = h_cm / 2.54
         ai    = float(layer.get('ai',   0))
         mi    = float(layer.get('mi',   1.0))
         sni   = float(layer.get('sni',  ai * h_in * mi))
-        li    = layers.index(layer) + 1
+        # Mr ของชั้นนี้ (ถ้ามีใน layer dict ใช้เลย ไม่มีใช้ mr_psi subgrade)
+        mr_this = float(layer.get('mr_psi', mr_psi))
+        mr_this_mpa = round(mr_this * 0.006895, 1)
+        # Mr ของชั้นถัดไป (สำหรับคำนวณ SN_req ณ ระดับนี้)
+        if idx + 1 < len(layers):
+            next_layer = layers[idx + 1]
+            mr_next = float(next_layer.get('mr_psi', mr_psi))
+        else:
+            mr_next = mr_psi  # ชั้นสุดท้าย → ใช้ Mr subgrade
+
+        sn_req_i = _sn_req_for_mr(mr_next)
+        cum_sn_before = cum_sn
         cum_sn += sni
+
+        # D_min calculation
+        sn_remaining = max(0.0, sn_req_i - cum_sn_before)
+        if ai > 0 and mi > 0:
+            d_min_in = sn_remaining / (ai * mi)
+            d_min_cm = d_min_in * 2.54
+        else:
+            d_min_in = 0.0
+            d_min_cm = 0.0
+
+        is_ok = h_cm >= d_min_cm - 0.05 or cum_sn >= sn_req_i
 
         doc.add_paragraph()
         hdr_p = _para(doc, indent_cm=1.0, space_before=6)
         _run(hdr_p, f'ชั้นที่ {li}: {_short_mat(mat)}', bold=True, underline=True)
 
-        p_mat2 = _para(doc, indent_cm=1.5)
+        # ── ข้อมูลวัสดุ ──
+        p_mat2 = _para(doc, indent_cm=1.5, space_after=2)
         _run(p_mat2, 'ข้อมูลวัสดุ:', bold=True)
-        p_mat3 = _para(doc, indent_cm=2.0)
+        p_mat3 = _para(doc, indent_cm=2.0, space_after=2)
         _run(p_mat3,
+             f'\u2022 Mr = {mr_this:,.0f} psi  =  {mr_this_mpa:.1f} MPa\n'
              f'\u2022 Layer Coefficient (a{li}) = {ai:.2f}\n'
-             f'\u2022 Drainage Coefficient (m{li}) = {mi:.2f}\n'
-             f'\u2022 ความหนาที่ใช้ออกแบบ = {h_cm:.0f} cm ({h_in:.2f} in)')
+             f'\u2022 Drainage Coefficient (m{li}) = {mi:.2f}')
 
-        p_sn = _para(doc, indent_cm=1.5)
+        # ── การคำนวณ SN ──
+        p_sn_hdr = _para(doc, indent_cm=1.5, space_before=4, space_after=2)
+        _run(p_sn_hdr, 'การคำนวณ SN:', bold=True)
+        p_sn_from = _para(doc, indent_cm=2.0, space_after=2)
+        _run(p_sn_from, 'จากสมการ ', sz=FS)
+        _eq_run(p_sn_from, 'AASHTO 1993', italic=True, sz=FS)
+        _run(p_sn_from, ':  ', sz=FS)
+        _run(p_sn_from, f'SN_{li} = {sn_req_i:.2f}', bold=True, sz=FS)
+
+        # ── การคำนวณความหนาขั้นต่ำ ──
+        p_dmin_hdr = _para(doc, indent_cm=1.5, space_before=4, space_after=2)
+        _run(p_dmin_hdr, 'การคำนวณความหนาขั้นต่ำ:', bold=True)
+        _eq_para(doc,
+            f'D_{li}  \u2265  SN_{li} / (a_{li} \u00d7 m_{li})'
+            f'  =  {sn_req_i:.2f} / ({ai:.2f} \u00d7 {mi:.2f})'
+            f'  =  {d_min_in:.2f} in  ({d_min_cm:.1f} cm)',
+            indent_cm=2.5, italic=True)
+
+        # ── เลือกใช้ความหนา ──
+        p_sel_hdr = _para(doc, indent_cm=1.5, space_before=4, space_after=2)
+        _run(p_sel_hdr, 'เลือกใช้ความหนา:', bold=True)
+        p_sel_val = _para(doc, indent_cm=2.5, space_after=2)
+        _run(p_sel_val, f'D_{li}(design)  =  ', bold=True, sz=FS)
+        _run(p_sel_val, f'{h_cm:.0f} cm  ({h_in:.2f} in)', bold=True, sz=FS + 1, color=BLUE)
+
+        # ── SN contribution ──
+        p_sn = _para(doc, indent_cm=1.5, space_before=4, space_after=2)
         _run(p_sn, 'SN contribution:', bold=True)
         _eq_para(doc,
             f'\u0394SN_{li} = a_{li} \u00d7 D_{li} \u00d7 m_{li}'
             f'  =  {ai:.2f} \u00d7 {h_in:.2f} \u00d7 {mi:.2f}  =  {sni:.3f}',
             indent_cm=2.5, italic=True)
-        _eq_para(doc, f'\u03a3SN  =  {cum_sn:.3f}', indent_cm=2.5, bold=True, italic=False)
+        p_cum = _para(doc, indent_cm=2.5, space_after=4)
+        _run(p_cum, f'\u03a3SN  =  {cum_sn:.3f}', bold=True, sz=FS)
 
-        is_ok = cum_sn >= sn_req or li < len(layers)
-        p_st = _para(doc, indent_cm=2.0)
-        _run(p_st, f'สถานะ:  {"✓ OK" if is_ok else "✗ NG"}',
-             bold=True, color=GREEN if is_ok else RED)
+        # ── สถานะ ──
+        status_txt = f'สถานะ:  \u2713 OK \u2014 ความหนาเพียงพอ' if is_ok else f'สถานะ:  \u2717 NG \u2014 ความหนาไม่เพียงพอ'
+        p_st = _para(doc, indent_cm=2.0, space_after=6)
+        _run(p_st, status_txt, bold=True, color=GREEN if is_ok else RED)
 
     # ════════════════════════════════════════
     # .5 ตารางสรุป SN
@@ -622,10 +686,7 @@ def build_flexible_report(ss: dict) -> bytes | None:
 
     p_cap_sum = _para(doc, space_before=4)
     p_cap_sum.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    import re as _re
-    _m = _re.match(r'^(.*?)(\d+)$', str(tbl_sn).strip())
-    tbl_sum = f"{_m.group(1)}{int(_m.group(2))+1}" if _m else f"{tbl_sn}+1"
-    _run(p_cap_sum, f'ตารางที่ {tbl_sum}  สรุปโครงสร้างชั้นทางที่ออกแบบ', bold=True, underline=True)
+    _run(p_cap_sum, f'ตารางที่ {tbl_sn}  {cap_sn}', bold=True, underline=True)
 
     _summary_table(doc, layers, cbr, fig_bytes=fig_bytes)
 
