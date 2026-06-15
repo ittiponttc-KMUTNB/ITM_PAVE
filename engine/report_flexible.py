@@ -448,7 +448,7 @@ def build_flexible_report(ss: dict) -> bytes | None:
         mr_l  = float(layer.get('mr_psi', mr_psi) if 'mr_psi' in layer else mr_psi)
         row   = mat_tbl.add_row()
         _tbl_cell(row.cells[0], str(i+1))
-        _tbl_cell(row.cells[1], _short_mat(mat), align=WD_ALIGN_PARAGRAPH.LEFT)
+        _tbl_cell(row.cells[1], mat, align=WD_ALIGN_PARAGRAPH.LEFT)
         _tbl_cell(row.cells[2], f'{ai:.2f}')
         _tbl_cell(row.cells[3], f'{mi:.2f}')
         _tbl_cell(row.cells[4], f'{mr_l:,.0f}')
@@ -477,7 +477,7 @@ def build_flexible_report(ss: dict) -> bytes | None:
 
         doc.add_paragraph()
         hdr_p = _para(doc, indent_cm=1.0, space_before=6)
-        _run(hdr_p, f'ชั้นที่ {li}: {_short_mat(mat)}', bold=True, underline=True)
+        _run(hdr_p, f'ชั้นที่ {li}: {mat}', bold=True, underline=True)
 
         p_mat2 = _para(doc, indent_cm=1.5)
         _run(p_mat2, 'ข้อมูลวัสดุ:', bold=True)
@@ -544,7 +544,7 @@ def build_flexible_report(ss: dict) -> bytes | None:
         sni   = float(layer.get('sni',  ai * h_in * mi))
         cum2 += sni
         row   = sn_tbl2.add_row()
-        vals  = [str(i+1), _short_mat(layer.get('material','')),
+        vals  = [str(i+1), layer.get('material',''),
                  f'{ai:.2f}', f'{mi:.2f}', f'{h_in:.2f}',
                  f'{h_cm:.0f}', f'{sni:.3f}', f'{cum2:.3f}']
         for j, val in enumerate(vals):
