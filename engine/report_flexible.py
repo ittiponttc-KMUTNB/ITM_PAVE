@@ -464,40 +464,106 @@ def build_flexible_report(ss: dict) -> bytes | None:
     _run(p_calc, 'การคำนวณความหนาขั้นต่ำของแต่ละชั้น ใช้หลักการว่า Structural Number (SN) ที่จุดใด ๆ '
          'ต้องมากกว่าหรือเท่ากับ SN ที่ต้องการ โดยคำนวณจากค่า M\u1D63 ของชั้นถัดไป')
 
+    # helper: คำนวณ SN_req จาก Mr ที่กำหนด (AASHTO 1993 bisection)
+    def _sn_req_for_mr(mr_val):
+        if not mr_val or mr_val <= 0 or W18 <= 0:
+            return 0.0
+        try:
+            def _lhs(sn):
+                try:
+                    dpsi = pi - pt
+                    return (zr * so
+                            + 9.36 * math.log10(sn + 1) - 0.20
+                            + math.log10(dpsi / 2.7) / (0.4 + 1094 / (sn + 1) ** 5.19)
+                            + 2.32 * math.log10(mr_val) - 8.07)
+                except Exception:
+                    return 0.0
+            target = math.log10(W18)
+            lo, hi = 0.5, 20.0
+            for _ in range(80):
+                mid = (lo + hi) / 2.0
+                if _lhs(mid) >= target:
+                    hi = mid
+                else:
+                    lo = mid
+            return round((lo + hi) / 2.0, 3)
+        except Exception:
+            return 0.0
+
     cum_sn = 0.0
-    for layer in layers:
-        mat   = layer.get('material', '')
-        h_cm  = float(layer.get('h_cm', 0))
-        h_in  = h_cm / 2.54
-        ai    = float(layer.get('ai',   0))
-        mi    = float(layer.get('mi',   1.0))
-        sni   = float(layer.get('sni',  ai * h_in * mi))
-        li    = layers.index(layer) + 1
-        cum_sn += sni
+    for idx, layer in enumerate(layers):
+        li       = idx + 1
+        mat      = layer.get('material', '')
+        h_cm     = float(layer.get('h_cm', 0))
+        h_in     = h_cm / 2.54
+        ai       = float(layer.get('ai',   0))
+        mi       = float(layer.get('mi',   1.0))
+        sni      = float(layer.get('sni',  ai * h_in * mi))
+        mr_this  = float(layer.get('mr_psi', mr_psi))
+        mr_this_mpa = round(mr_this * 0.006895, 1)
+
+        # Mr ของชั้นถัดไป สำหรับคำนวณ SN_req ณ ระดับนี้
+        if idx + 1 < len(layers):
+            mr_next = float(layers[idx + 1].get('mr_psi', mr_psi))
+        else:
+            mr_next = mr_psi
+
+        sn_req_i      = _sn_req_for_mr(mr_next)
+        cum_sn_before = cum_sn
+        cum_sn       += sni
+        is_ok         = cum_sn >= sn_req_i
 
         doc.add_paragraph()
         hdr_p = _para(doc, indent_cm=1.0, space_before=6)
         _run(hdr_p, f'ชั้นที่ {li}: {mat}', bold=True, underline=True)
 
-        p_mat2 = _para(doc, indent_cm=1.5)
+        # ── ข้อมูลวัสดุ ──
+        p_mat2 = _para(doc, indent_cm=1.5, space_after=2)
         _run(p_mat2, 'ข้อมูลวัสดุ:', bold=True)
-        p_mat3 = _para(doc, indent_cm=2.0)
+        p_mat3 = _para(doc, indent_cm=2.0, space_after=2)
         _run(p_mat3,
+             f'\u2022 Mr = {mr_this:,.0f} psi  =  {mr_this_mpa:.1f} MPa\n'
              f'\u2022 Layer Coefficient (a{li}) = {ai:.2f}\n'
-             f'\u2022 Drainage Coefficient (m{li}) = {mi:.2f}\n'
-             f'\u2022 ความหนาที่ใช้ออกแบบ = {h_cm:.0f} cm ({h_in:.2f} in)')
+             f'\u2022 Drainage Coefficient (m{li}) = {mi:.2f}')
 
-        p_sn = _para(doc, indent_cm=1.5)
+        # ── การคำนวณ SN ──
+        p_sn_hdr = _para(doc, indent_cm=1.5, space_before=4, space_after=2)
+        _run(p_sn_hdr, 'การคำนวณ SN:', bold=True)
+        p_sn_from = _para(doc, indent_cm=2.0, space_after=2)
+        _run(p_sn_from, 'จากสมการ ', sz=FS)
+        _eq_run(p_sn_from, 'AASHTO 1993', italic=True)
+        _run(p_sn_from, ':  ', sz=FS)
+        _run(p_sn_from, f'SN_{li} = {sn_req_i:.2f}', bold=True, sz=FS)
+
+        # ── การคำนวณความหนาขั้นต่ำ ──
+        p_dmin_hdr = _para(doc, indent_cm=1.5, space_before=4, space_after=2)
+        _run(p_dmin_hdr, 'การคำนวณความหนาขั้นต่ำ:', bold=True)
+        _eq_para(doc,
+                 f'D_{li}  \u2265  SN_{li} / (a_{li} \u00d7 m_{li})',
+                 indent_cm=2.5, italic=True)
+
+        # ── เลือกใช้ความหนา ──
+        p_sel_hdr = _para(doc, indent_cm=1.5, space_before=4, space_after=2)
+        _run(p_sel_hdr, 'เลือกใช้ความหนา:', bold=True)
+        p_sel_val = _para(doc, indent_cm=2.5, space_after=2)
+        _run(p_sel_val, f'D_{li}(design)  =  ', bold=True, sz=FS)
+        _run(p_sel_val, f'{h_cm:.0f} cm  ({h_in:.2f} in)', bold=True, sz=FS + 1, color=BLUE)
+
+        # ── SN contribution ──
+        p_sn = _para(doc, indent_cm=1.5, space_before=4, space_after=2)
         _run(p_sn, 'SN contribution:', bold=True)
         _eq_para(doc,
-            f'\u0394SN_{li} = a_{li} \u00d7 D_{li} \u00d7 m_{li}'
-            f'  =  {ai:.2f} \u00d7 {h_in:.2f} \u00d7 {mi:.2f}  =  {sni:.3f}',
-            indent_cm=2.5, italic=True)
-        _eq_para(doc, f'\u03a3SN  =  {cum_sn:.3f}', indent_cm=2.5, bold=True, italic=False)
+                 f'\u0394SN_{li} = a_{li} \u00d7 D_{li} \u00d7 m_{li}'
+                 f'  =  {ai:.2f} \u00d7 {h_in:.2f} \u00d7 {mi:.2f}  =  {sni:.3f}',
+                 indent_cm=2.5, italic=True)
+        p_cum = _para(doc, indent_cm=2.5, space_after=4)
+        _run(p_cum, f'\u03a3SN  =  {cum_sn:.3f}', bold=True, sz=FS)
 
-        is_ok = cum_sn >= sn_req or li < len(layers)
-        p_st = _para(doc, indent_cm=2.0)
-        _run(p_st, f'สถานะ:  {"✓ OK" if is_ok else "✗ NG"}',
+        # ── สถานะ ──
+        p_st = _para(doc, indent_cm=2.0, space_after=6)
+        _run(p_st,
+             f'สถานะ:  \u2713 OK \u2014 ความหนาเพียงพอ' if is_ok else
+             f'สถานะ:  \u2717 NG \u2014 ความหนาไม่เพียงพอ',
              bold=True, color=GREEN if is_ok else RED)
 
     # ════════════════════════════════════════
