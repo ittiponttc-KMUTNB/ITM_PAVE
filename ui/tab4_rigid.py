@@ -374,8 +374,7 @@ def _graphs(prefix, MR_psi):
 #  Design Block
 # ─────────────────────────────────────────────
 
-def _design_block(prefix, ptype, fc_cyl, ec_psi, cd, w18_req, pt, zr, so, bd, bdlt,
-                  esal_rigid_dict=None):
+def _design_block(prefix, ptype, fc_cyl, ec_psi, cd, w18_req, pt, zr, so, bd, bdlt):
     dpsi  = 4.5 - pt
     k_eff = st.session_state.get(f'{prefix}_k_eff')
 
@@ -419,20 +418,13 @@ def _design_block(prefix, ptype, fc_cyl, ec_psi, cd, w18_req, pt, zr, so, bd, bd
     # คำนวณ W18 ทุก D
     rows = []
     for d_in, d_cm in D_PAIRS:
-        # W18_req แต่ละความหนา — ถ้ามี esal_rigid_dict ใช้ค่าตาม d_cm นั้น
-        # ถ้าไม่มี (manual mode) ใช้ w18_req เดิมที่รับมา
-        if esal_rigid_dict:
-            w18_req_d = int(esal_rigid_dict.get(d_cm,
-                            esal_rigid_dict.get(str(d_cm), w18_req)))
-        else:
-            w18_req_d = w18_req
         lw, wc = calc_w18(d_in, dpsi, pt, zr, so, SC_FIXED, cd, j_val, ec_psi, k_eff)
-        passed = wc >= w18_req_d
-        ratio  = round(wc / w18_req_d, 3) if w18_req_d > 0 else 0
+        passed = wc >= w18_req
+        ratio  = round(wc / w18_req, 3) if w18_req > 0 else 0
         rows.append({
             'd_cm':    d_cm, 'd_inch': d_in,
             'log_w18': round(lw, 4),
-            'w18_cap': round(wc, 0), 'w18_req': w18_req_d,
+            'w18_cap': round(wc, 0), 'w18_req': w18_req,
             'passed':  passed, 'ratio': ratio,
         })
     st.session_state[f'{prefix}_design_rows'] = rows
@@ -492,11 +484,15 @@ def _design_block(prefix, ptype, fc_cyl, ec_psi, cd, w18_req, pt, zr, so, bd, bd
                                     f'struct_{prefix}.png', 'image/png', key=f'dl_str_{prefix}')
                 plt.close(fig)
 
+    # ⭐ FIX: บันทึก R และ ZR ที่ใช้จริงตอน Design Check ลง design_params
+    # เดิมไม่มี key 'R' และ 'ZR' อยู่เลย ทำให้ report_rigid.py ต้อง fallback
+    # ไปอ่านค่า default ผิด ๆ (R=90 เสมอ, ZR=-1.282 เสมอ)
     st.session_state[f'{prefix}_design_params'] = {
         'w18': w18_req, 'pt': pt, 'so': so, 'k_eff': k_eff,
         'fc_cube': st.session_state.get('fc_cube', 350),
         'fc_cyl': fc_cyl, 'sc': SC_FIXED, 'ec': ec_psi,
         'j': j_val, 'cd': cd, 'dpsi': dpsi, 'k_opt': k_opt,
+        'R': int(st.session_state.get('r0_rig', 90)), 'ZR': zr,
     }
     return {'rows': rows, 'j': j_val, 'k_eff': k_eff, 'k_opt': k_opt}
 
@@ -847,15 +843,13 @@ def render():
         _card_header('🔲  JPCP / JRCP — Design', _JPCP_BD)
         with st.container(border=True):
             res_j = _design_block('jpcp', 'JPCP/JRCP', fc_cyl, ec_psi, cd,
-                                   w18_req, pt, zr, so, _JPCP_BD, _JPCP_BDLT,
-                                   esal_rigid_dict=esal_rigid if not ss.get('w18_manual_mode') else None)
+                                   w18_req, pt, zr, so, _JPCP_BD, _JPCP_BDLT)
 
     with col_c3:
         _card_header('〰️  CRCP — Design', _CRCP_BD)
         with st.container(border=True):
             res_c = _design_block('crcp', 'CRCP', fc_cyl, ec_psi, cd,
-                                   w18_req, pt, zr, so, _CRCP_BD, _CRCP_BDLT,
-                                   esal_rigid_dict=esal_rigid if not ss.get('w18_manual_mode') else None)
+                                   w18_req, pt, zr, so, _CRCP_BD, _CRCP_BDLT)
 
     # ════════════════════════════════════════
     #  Comparison Summary
