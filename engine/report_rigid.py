@@ -560,7 +560,11 @@ def build_rigid_report(ss: dict) -> bytes | None:
         p['ESB_psi']= ss.get(f'{prefix}_esb', p.get('ESB_psi', 0)) or 0
         p['MR_psi'] = ss.get('mr_subgrade_psi', p.get('MR_psi', 7000)) or 7000
         p['ls']     = ss.get(f'{prefix}_ls_val', p.get('ls', 0.0)) or 0.0
-        p['ZR']     = ss.get('zr_rig', -1.282) or -1.282
+        # ⭐ FIX: เดิมบรรทัดนี้ทับค่า ZR ที่ถูกต้อง (ซึ่งตอนนี้มากับ
+        # design_params จาก tab4_rigid.py แล้ว) ด้วย ss.get('zr_rig', ...)
+        # ซึ่งเป็น key ที่ไม่เคยถูก set ที่ไหนเลย → ได้ -1.282 เสมอ
+        # แก้เป็น: ใช้ค่าที่มีอยู่ใน p ก่อน (มาจาก design_params) แล้วค่อย fallback
+        p['ZR']     = p.get('ZR', ss.get('zr_rig', -1.282)) or -1.282
         return p
 
     # ── JPCP section ─────────────────────────────────────────────
