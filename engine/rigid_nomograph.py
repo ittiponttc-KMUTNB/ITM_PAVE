@@ -360,6 +360,7 @@ def plot_f33(MR_psi, ESB_psi, DSB_in, res):
     fig, ax = plt.subplots(figsize=(5,5))
     fig.patch.set_facecolor('white'); ax.set_facecolor('white')
     ax.set_xlim(0,1); ax.set_ylim(0,1)
+    ax.set_aspect('equal', adjustable='box')   # บังคับ 4 quadrant เป็นสี่เหลี่ยมจัตุรัสเสมอ
     ax.set_xticks([]); ax.set_yticks([])
     for sp in ax.spines.values(): sp.set_visible(False)
     ax.add_patch(plt.Rectangle((0,0),1,1,lw=2.5,ec='black',fc='none'))

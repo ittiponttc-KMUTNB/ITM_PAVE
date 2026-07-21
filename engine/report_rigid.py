@@ -278,7 +278,7 @@ def build_rigid_report(ss: dict) -> bytes | None:
             e = layer.get('E_MPa', 0)
             row = tbl.add_row(); _set_col_w(row, cw)
             _sc(row.cells[0], str(rn), align=WD_ALIGN_PARAGRAPH.CENTER)
-            _sc(row.cells[1], _fmt_name(layer.get('name', '')))
+            _sc(row.cells[1], layer.get('name', ''))
             _sc(row.cells[2], str(int(t)), align=WD_ALIGN_PARAGRAPH.CENTER)
             _sc(row.cells[3], f'{int(e):,}' if e > 0 else '-', align=WD_ALIGN_PARAGRAPH.CENTER)
             rn += 1
@@ -322,7 +322,7 @@ def build_rigid_report(ss: dict) -> bytes | None:
             E13 = E**(1/3); hE = h * E13; sh += h; shE += hE
             r2 = tbl2.add_row(); _set_col_w(r2, cw2)
             _sc(r2.cells[0], str(idx), align=WD_ALIGN_PARAGRAPH.CENTER)
-            _sc(r2.cells[1], _fmt_name(layer.get('name','')))
+            _sc(r2.cells[1], layer.get('name',''))
             _sc(r2.cells[2], f'{h:,}', align=WD_ALIGN_PARAGRAPH.CENTER)
             _sc(r2.cells[3], f'{E:,}', align=WD_ALIGN_PARAGRAPH.CENTER)
             _sc(r2.cells[4], f'{E13:.4f}', align=WD_ALIGN_PARAGRAPH.CENTER)
@@ -480,7 +480,7 @@ def build_rigid_report(ss: dict) -> bytes | None:
         data_rows = [{'thick': str(int(d_cm)), 'material': f'ผิวทางคอนกรีต\n{ptype}'}]
         for l in valid:
             data_rows.append({'thick': str(int(l.get('thickness_cm',0))),
-                              'material': _fmt_name(l.get('name',''))})
+                              'material': l.get('name','')})
         data_rows.append({'thick': 'Existing',
                           'material': f'Earth Embankment\nor Subgrade, CBR≥\n{cbr:.0f} %'})
 
@@ -560,11 +560,12 @@ def build_rigid_report(ss: dict) -> bytes | None:
         p['ESB_psi']= ss.get(f'{prefix}_esb', p.get('ESB_psi', 0)) or 0
         p['MR_psi'] = ss.get('mr_subgrade_psi', p.get('MR_psi', 7000)) or 7000
         p['ls']     = ss.get(f'{prefix}_ls_val', p.get('ls', 0.0)) or 0.0
-        # ⭐ FIX: เดิมบรรทัดนี้ทับค่า ZR ที่ถูกต้อง (ซึ่งตอนนี้มากับ
-        # design_params จาก tab4_rigid.py แล้ว) ด้วย ss.get('zr_rig', ...)
-        # ซึ่งเป็น key ที่ไม่เคยถูก set ที่ไหนเลย → ได้ -1.282 เสมอ
-        # แก้เป็น: ใช้ค่าที่มีอยู่ใน p ก่อน (มาจาก design_params) แล้วค่อย fallback
-        p['ZR']     = p.get('ZR', ss.get('zr_rig', -1.282)) or -1.282
+        # R และ ZR ต้องดึงจาก R0 (r0_rig) ที่ผู้ใช้เลือกจริงในหน้า Rigid Design
+        # แก้บั๊ก: เดิม 'zr_rig' ไม่เคยถูก set ที่ไหนเลย ทำให้ ZR ค้างที่ -1.282
+        # (ค่า R0=90%) เสมอ ไม่ว่าผู้ใช้จะเลือก R0 เท่าไหร่ก็ตาม
+        from engine.rigid_nomograph import get_zr
+        p['R']  = ss.get('r0_rig', 90)
+        p['ZR'] = get_zr(p['R'])
         return p
 
     # ── JPCP section ─────────────────────────────────────────────
