@@ -642,3 +642,329 @@ def build_rigid_report(ss: dict) -> bytes | None:
     doc.save(buf)
     buf.seek(0)
     return buf.read()
+
+
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║  PDF Summary Report — รายงานย่อ (เปรียบเทียบ JPCP vs CRCP)      ║
+# ║  format ตาม Rigid V7 (_create_pdf_summary)                       ║
+# ╚══════════════════════════════════════════════════════════════════╝
+
+def build_rigid_pdf_summary(ss: dict) -> bytes | None:
+    """
+    สร้าง PDF summary ย่อ — ชื่อโครงการ + ตารางเปรียบเทียบ JPCP vs CRCP + ตารางชั้นวัสดุ
+    ss ต้องมี: rigid_results, jpcp/crcp_design_params, jpcp/crcp_design_rows,
+               jpcp/crcp_layers, jpcp/crcp_rec_d_cm, jpcp/crcp_k_eff
+    """
+    try:
+        from fpdf import FPDF
+    except ImportError:
+        return None
+
+    import os
+    from engine.rigid_nomograph import get_zr, mr_from_cbr
+
+    BASE_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # root ของโปรเจกต์
+    FONT_REG  = os.path.join(BASE_DIR, 'Sarabun-Regular.ttf')
+    FONT_BOLD = os.path.join(BASE_DIR, 'Sarabun-Bold.ttf')
+    if not os.path.exists(FONT_REG):
+        FONT_REG  = 'Sarabun-Regular.ttf'
+        FONT_BOLD = 'Sarabun-Bold.ttf'
+
+    rr = ss.get('rigid_results', {}) or {}
+    has_j = bool(rr.get('JPCP/JRCP') or rr.get('JPCP') or rr.get('jpcp'))
+    has_c = bool(rr.get('CRCP') or rr.get('crcp'))
+    if not has_j and not has_c:
+        return None
+
+    proj_name = ss.get('project_name', '') or '(ไม่ระบุชื่อโครงการ)'
+    date_str  = datetime.now().strftime('%d/%m/%Y %H:%M')
+
+    pj = dict(ss.get('jpcp_design_params', {})) if has_j else {}
+    pc = dict(ss.get('crcp_design_params', {})) if has_c else {}
+    shared = pj if pj else pc   # พารามิเตอร์ร่วม (fc/ec/sc/cd/pt/so/dpsi) เหมือนกันทั้ง 2 ฝั่ง
+
+    kj_eff = ss.get('jpcp_k_eff')
+    kc_eff = ss.get('crcp_k_eff')
+    kj_opt = pj.get('k_opt')
+    kc_opt = pc.get('k_opt')
+
+    dj_cm  = ss.get('jpcp_rec_d_cm')
+    dc_cm  = ss.get('crcp_rec_d_cm')
+    dj_in  = round(dj_cm / 2.54) if dj_cm else None
+    dc_in  = round(dc_cm / 2.54) if dc_cm else None
+
+    rows_j = ss.get('jpcp_design_rows', [])
+    rows_c = ss.get('crcp_design_rows', [])
+
+    def _get_row(rows, d_cm):
+        return next((r for r in rows if r['d_cm'] == d_cm), None) if d_cm else None
+    rj  = _get_row(rows_j, dj_cm)
+    rc_ = _get_row(rows_c, dc_cm)
+
+    fc_cube = shared.get('fc_cube', ss.get('fc_cube', 350))
+    ec_psi  = shared.get('ec', 0)
+    sc_val  = shared.get('sc', 600)
+    cd      = shared.get('cd', ss.get('cd_rig', 1.0))
+    pt      = shared.get('pt', float(ss.get('pt_global', 2.5)))
+    dpsi    = shared.get('dpsi', 4.5 - pt)
+    so      = shared.get('so', ss.get('so_rig', 0.35))
+    R       = ss.get('r0_rig', 90)
+    zr      = get_zr(R)
+    cbr     = float(ss.get('cbr_design', 4.0))
+    MR_psi  = float(ss.get('_shared_mr_inp') or ss.get('jpcp_mr_inp')
+                     or ss.get('mr_subgrade_psi') or 0) or mr_from_cbr(cbr)
+
+    jj = pj.get('j', ss.get('jpcp_j', 2.8))
+    jc = pc.get('j', ss.get('crcp_j', 2.6))
+
+    dkj = (kj_eff - kj_opt) if (kj_eff and kj_opt) else None
+    dkc = (kc_eff - kc_opt) if (kc_eff and kc_opt) else None
+
+    passed_j = rj['passed'] if rj else None
+    passed_c = rc_['passed'] if rc_ else None
+    kj_ok = (kj_eff >= kj_opt) if (kj_eff and kj_opt) else None
+    kc_ok = (kc_eff >= kc_opt) if (kc_eff and kc_opt) else None
+    overall_j = (passed_j and kj_ok) if (passed_j is not None and kj_ok is not None) else None
+    overall_c = (passed_c and kc_ok) if (passed_c is not None and kc_ok is not None) else None
+
+    sections = [
+        ('1 · พารามิเตอร์ออกแบบ', [
+            {'label': "f'c (cube)",    'val_j': f'{fc_cube:.0f} ksc',  'shared': True},
+            {'label': 'Ec',            'val_j': f'{ec_psi:,.0f} psi',  'shared': True},
+            {'label': 'Sc (ทล. lock)', 'val_j': f'{sc_val:.0f} psi',   'shared': True},
+            {'label': 'J',             'val_j': f'{jj:.1f}' if jj else '-',
+                                        'val_c': f'{jc:.1f}' if jc else '-'},
+            {'label': 'Cd',            'val_j': f'{cd:.1f}',           'shared': True},
+            {'label': 'Pt / DPSI',     'val_j': f'{pt:.1f} / {dpsi:.1f}', 'shared': True},
+            {'label': 'ZR / So',       'val_j': f'{zr:.3f} / {so:.2f}',   'shared': True},
+            {'label': 'CBR',           'val_j': f'{cbr:.1f} %',        'shared': True},
+            {'label': 'MR (subgrade)', 'val_j': f'{MR_psi:,.0f} psi',  'shared': True},
+        ]),
+        ('2 · ความหนาแผ่นคอนกรีต', [
+            {'label': 'D แนะนำ',
+             'val_j': f'{dj_in} in ({dj_cm} cm)' if dj_cm else '-',
+             'val_c': f'{dc_in} in ({dc_cm} cm)' if dc_cm else '-', 'bold': True},
+            {'label': 'W18 required',
+             'val_j': f'{rj["w18_req"]:,.0f}' if rj else '-',
+             'val_c': f'{rc_["w18_req"]:,.0f}' if rc_ else '-'},
+            {'label': 'W18 capacity',
+             'val_j': f'{rj["w18_cap"]:,.0f}' if rj else '-',
+             'val_c': f'{rc_["w18_cap"]:,.0f}' if rc_ else '-'},
+            {'label': 'Ratio (cap/req)',
+             'val_j': f'x{rj["ratio"]:.2f}' if rj else '-',
+             'val_c': f'x{rc_["ratio"]:.2f}' if rc_ else '-', 'bold': True},
+        ]),
+        ('3 · k_opt vs k_eff', [
+            {'label': 'k_eff',
+             'val_j': f'{kj_eff:.0f} pci' if kj_eff else '-',
+             'val_c': f'{kc_eff:.0f} pci' if kc_eff else '-'},
+            {'label': 'k_opt (min required)',
+             'val_j': f'{kj_opt:.0f} pci' if kj_opt else '-',
+             'val_c': f'{kc_opt:.0f} pci' if kc_opt else '-'},
+            {'label': 'Dk = k_eff - k_opt',
+             'val_j': f'{dkj:+.0f} pci ({dkj/kj_opt*100:+.1f}%)' if dkj is not None else '-',
+             'val_c': f'{dkc:+.0f} pci ({dkc/kc_opt*100:+.1f}%)' if dkc is not None else '-'},
+        ]),
+        ('4 · ผลการตรวจสอบ', [
+            {'label': 'W18 cap >= W18 req',
+             'val_j': 'ผ่าน' if passed_j else 'ไม่ผ่าน',
+             'val_c': 'ผ่าน' if passed_c else 'ไม่ผ่าน', 'bold': True},
+            {'label': 'k_eff >= k_opt',
+             'val_j': 'ผ่าน' if kj_ok else 'ไม่ผ่าน',
+             'val_c': 'ผ่าน' if kc_ok else 'ไม่ผ่าน', 'bold': True},
+            {'label': 'สรุปผล',
+             'val_j': 'ผ่าน' if overall_j else 'ไม่ผ่าน',
+             'val_c': 'ผ่าน' if overall_c else 'ไม่ผ่าน',
+             'bold': True, 'shade': True},
+        ]),
+    ]
+
+    layers_j = ss.get('jpcp_layers', []) if has_j else []
+    layers_c = ss.get('crcp_layers', []) if has_c else []
+
+    designer = '—'
+
+    class PDF(FPDF):
+        def header(self):
+            pass  # ไม่ใช้ auto-header — วาด header เองด้านล่าง
+
+        def footer(self):
+            self.set_y(-10)
+            self.set_font('Sarabun', '', 8)
+            self.set_text_color(150, 150, 150)
+            self.cell(0, 8, f'Page {self.page_no()} | KMUTNB - ภาควิชาครุศาสตร์โยธา - มจพ.',
+                      align='C')
+            self.set_text_color(0, 0, 0)
+
+    pdf = PDF(orientation='P', unit='mm', format='A4')
+    pdf.add_font('Sarabun', '',  FONT_REG,  uni=True)
+    pdf.add_font('Sarabun', 'B', FONT_BOLD, uni=True)
+    pdf.set_font('Sarabun', '', 10)
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=12)
+
+    # ══════════════════════════════════════════════════════════
+    # Header — สีน้ำเงิน
+    # ══════════════════════════════════════════════════════════
+    BLUE      = (21, 101, 192)   # #1565C0
+    PAGE_W    = 190
+    H_TOP     = 10
+    COL_R_W   = 55
+    COL_L_W   = PAGE_W - COL_R_W
+
+    pdf.set_xy(10, H_TOP)
+    pdf.set_font('Sarabun', 'B', 14)
+    pdf.set_text_color(*BLUE)
+    pdf.cell(COL_L_W, 7, 'Rigid Pavement Design Report', ln=False)
+
+    pdf.set_xy(10 + COL_L_W, H_TOP)
+    pdf.set_font('Sarabun', '', 8)
+    pdf.set_text_color(80, 80, 80)
+    pdf.cell(COL_R_W, 7, f'ผู้ออกแบบ: {designer}', align='R', ln=True)
+
+    pdf.set_xy(10, H_TOP + 7)
+    pdf.set_font('Sarabun', '', 8)
+    pdf.set_text_color(120, 120, 120)
+    pdf.cell(COL_L_W, 5, 'AASHTO 1993 · ITM Pave Pro', ln=False)
+
+    pdf.set_xy(10 + COL_L_W, H_TOP + 7)
+    pdf.set_font('Sarabun', '', 8)
+    pdf.set_text_color(80, 80, 80)
+    pdf.cell(COL_R_W, 5, f'วันที่: {date_str}', align='R', ln=True)
+
+    pdf.set_draw_color(*BLUE)
+    pdf.set_line_width(0.6)
+    pdf.line(10, H_TOP + 13, 200, H_TOP + 13)
+    pdf.set_line_width(0.2)
+    pdf.set_draw_color(0, 0, 0)
+
+    pdf.set_xy(10, H_TOP + 16)
+    pdf.set_font('Sarabun', 'B', 10)
+    pdf.set_text_color(*BLUE)
+    pdf.cell(0, 6, f'Project: {proj_name}', ln=True)
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(2)
+
+    def sec_header(title):
+        pdf.set_fill_color(238, 242, 247)
+        pdf.set_font('Sarabun', 'B', 8)
+        pdf.set_text_color(84, 110, 122)
+        pdf.cell(0, 5, f'  {title}', ln=True, fill=True)
+        pdf.set_text_color(0, 0, 0)
+
+    W_LABEL = 62
+    W_COL   = 64
+
+    def tbl_header():
+        pdf.set_font('Sarabun', 'B', 9)
+        pdf.set_fill_color(21, 101, 192)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(W_LABEL, 6, 'รายการ', border=0, fill=True)
+        pdf.set_fill_color(21, 101, 192)
+        pdf.cell(W_COL, 6, '  JPCP / JRCP', border=0, fill=True)
+        pdf.set_fill_color(46, 125, 50)
+        pdf.cell(W_COL, 6, '  CRCP', border=0, fill=True, ln=True)
+        pdf.set_text_color(0, 0, 0)
+
+    def tbl_row(label, val_j, val_c, shade=False, bold_val=False):
+        pdf.set_fill_color(250, 250, 250) if shade else pdf.set_fill_color(255, 255, 255)
+        pdf.set_font('Sarabun', '', 8)
+        pdf.set_text_color(84, 110, 122)
+        pdf.cell(W_LABEL, 5, f'  {label}', border='B', fill=True)
+        pdf.set_text_color(26, 35, 126)
+        f = 'B' if bold_val else ''
+        pdf.set_font('Sarabun', f, 8)
+        pdf.cell(W_COL, 5, f'  {val_j}', border='B', fill=True)
+        pdf.set_text_color(27, 94, 32)
+        pdf.cell(W_COL, 5, f'  {val_c}', border='B', fill=True, ln=True)
+        pdf.set_text_color(0, 0, 0)
+
+    def tbl_row_shared(label, val):
+        pdf.set_fill_color(250, 250, 250)
+        pdf.set_font('Sarabun', '', 8)
+        pdf.set_text_color(84, 110, 122)
+        pdf.cell(W_LABEL, 5, f'  {label}', border='B', fill=True)
+        pdf.set_text_color(120, 120, 120)
+        pdf.cell(W_COL, 5, f'  {val}', border='B', fill=True)
+        pdf.cell(W_COL, 5, f'  {val}', border='B', fill=True, ln=True)
+        pdf.set_text_color(0, 0, 0)
+
+    tbl_header()
+    for sec_title, rows in sections:
+        sec_header(sec_title)
+        for row in rows:
+            if row.get('shared'):
+                tbl_row_shared(row['label'], row['val_j'])
+            else:
+                tbl_row(row['label'], str(row['val_j']), str(row.get('val_c', '-')),
+                        shade=row.get('shade', False),
+                        bold_val=row.get('bold', False))
+
+    pdf.ln(4)
+
+    # ── Layer Structure Table ─────────────────────────────────
+    if layers_j or layers_c:
+        pdf.set_font('Sarabun', 'B', 9)
+        pdf.set_fill_color(21, 101, 192)
+        pdf.set_text_color(255, 255, 255)
+        W_NO  = 10
+        W_MAT = 115
+        W_LC  = 32
+        pdf.cell(W_NO,  6, '#',            border=0, fill=True)
+        pdf.cell(W_MAT, 6, '  วัสดุ',      border=0, fill=True)
+        pdf.set_fill_color(21, 101, 192)
+        pdf.cell(W_LC,  6, '  JPCP (ซม.)', border=0, fill=True)
+        pdf.set_fill_color(46, 125, 50)
+        pdf.cell(W_LC,  6, '  CRCP (ซม.)', border=0, fill=True, ln=True)
+        pdf.set_text_color(0, 0, 0)
+
+        pdf.set_font('Sarabun', 'B', 9)
+        pdf.set_fill_color(238, 242, 247)
+        pdf.set_text_color(21, 101, 192)
+        pdf.cell(W_NO,  6, '0',                  border='B', fill=True)
+        pdf.cell(W_MAT, 6, '  แผ่นคอนกรีต (D)', border='B', fill=True)
+        pdf.cell(W_LC,  6, f'  {dj_cm or "-"}',  border='B', fill=True)
+        pdf.set_text_color(46, 125, 50)
+        pdf.cell(W_LC,  6, f'  {dc_cm or "-"}',  border='B', fill=True, ln=True)
+        pdf.set_text_color(0, 0, 0)
+
+        names_j = [l['name'] for l in layers_j]
+        names_c = [l['name'] for l in layers_c]
+        all_names = list(dict.fromkeys(names_j + names_c))
+
+        def _thick(layers, name):
+            for l in layers:
+                if l['name'] == name:
+                    return l['thickness_cm']
+            return None
+
+        tot_j = dj_cm or 0
+        tot_c = dc_cm or 0
+        for i, name in enumerate(all_names, 1):
+            tj = _thick(layers_j, name)
+            tc = _thick(layers_c, name)
+            if tj: tot_j += tj
+            if tc: tot_c += tc
+            pdf.set_font('Sarabun', '', 8)
+            pdf.set_fill_color(255, 255, 255)
+            pdf.set_text_color(100, 100, 100)
+            pdf.cell(W_NO, 6, str(i), border='B', fill=True)
+            pdf.set_text_color(84, 110, 122)
+            pdf.cell(W_MAT, 6, f'  {name[:65]}', border='B', fill=True)
+            pdf.set_text_color(26, 35, 126)
+            pdf.cell(W_LC, 6, f'  {tj if tj else "-"}', border='B', fill=True)
+            pdf.set_text_color(27, 94, 32)
+            pdf.cell(W_LC, 6, f'  {tc if tc else "-"}', border='B', fill=True, ln=True)
+            pdf.set_text_color(0, 0, 0)
+
+        pdf.set_font('Sarabun', 'B', 9)
+        pdf.set_fill_color(240, 244, 255)
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(W_NO,  6, '',                           border='B', fill=True)
+        pdf.cell(W_MAT, 6, '  รวมทั้งหมด (รวมคอนกรีต)', border='B', fill=True)
+        pdf.set_text_color(21, 101, 192)
+        pdf.cell(W_LC,  6, f'  {tot_j} ซม.',             border='B', fill=True)
+        pdf.set_text_color(46, 125, 50)
+        pdf.cell(W_LC,  6, f'  {tot_c} ซม.',             border='B', fill=True, ln=True)
+
+    return bytes(pdf.output())
