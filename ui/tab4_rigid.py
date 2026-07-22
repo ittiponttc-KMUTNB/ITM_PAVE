@@ -345,7 +345,7 @@ def _graphs(prefix, MR_psi):
     if prefix == 'jpcp':
         st.session_state['nomograph_img_k'] = fig_to_bytes(fig33)
     if st.session_state.get(f'{prefix}_show_f33'):
-        st.pyplot(fig33, use_container_width=True)
+        st.pyplot(fig33, use_container_width=False)
         st.download_button('⬇️ Fig.3.3', st.session_state[f'{prefix}_fig33_bytes'],
                             f'fig33_{prefix}.png', 'image/png', key=f'dl33_{prefix}')
     plt.close(fig33)
