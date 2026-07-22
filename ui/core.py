@@ -442,6 +442,59 @@ def _save_json(ss):
     )
 
 
+def _infer_missing_flex_state(ss):
+    """เดาค่า widget-state ล้วนๆ ของหน้า Flexible Design ที่บางไฟล์เก่า
+    (save จากแอปเวอร์ชันอื่น/ก่อนแก้) ไม่เคยบันทึกไว้ — flex_n_layers (slider
+    จำนวนชั้น) และ fsub_i (checkbox แบ่งชั้นย่อย) ไม่ผูกกับ 'ข้อมูล' โดยตรง
+    เลยหลุดจาก allowlist เดิม แต่เดาคืนได้จากข้อมูลจริงที่มี (fmat_i / fwear_i ฯลฯ)
+    """
+    # จำนวนชั้นใต้ AC — เดาจาก fmat_1..5 ตัวที่ไกลสุดที่ "เลือกวัสดุแล้ว"
+    if not ss.get('flex_n_layers'):
+        max_li = 1
+        for li in range(1, 6):
+            mat = ss.get(f'fmat_{li}')
+            if mat and mat != 'ไม่เลือก':
+                max_li = li
+        ss['flex_n_layers'] = max_li
+
+    # checkbox "แบ่งชั้นย่อย" — เดาจาก wear/bind/base ที่มีค่า แต่ fh_i ไม่มี/เป็น 0
+    for li in range(0, 5):
+        fsub_key = f'fsub_{li}'
+        if ss.get(fsub_key) is None:
+            wear = ss.get(f'fwear_{li}', 0) or 0
+            bind = ss.get(f'fbind_{li}', 0) or 0
+            base = ss.get(f'fbase_{li}', 0) or 0
+            fh   = ss.get(f'fh_{li}', 0) or 0
+            if (wear + bind + base) > 0 and fh == 0:
+                ss[fsub_key] = True
+
+
+def _infer_missing_rigid_state(ss):
+    """เดาค่า widget-state ล้วนๆ ของหน้า Rigid Design (คอนกรีต) ที่บางไฟล์เก่า
+    ไม่เคยบันทึกไว้เช่นกัน — jpcp_n/crcp_n (slider จำนวนชั้น) และ
+    jpcp_E_{i}_{ชื่อวัสดุ}/crcp_E_{i}_{ชื่อวัสดุ} (ช่องกรอก E แต่ละชั้น ซึ่งชื่อ key
+    ผูกกับชื่อวัสดุที่เลือกด้วย เลยไม่อยู่ใน allowlist เดิม) — กู้คืนได้จาก
+    jpcp_layers/crcp_layers ที่มีข้อมูล name/thickness_cm/E_MPa ครบอยู่แล้ว
+    """
+    for prefix in ('jpcp', 'crcp'):
+        layers = ss.get(f'{prefix}_layers')
+        if not layers:
+            continue
+        if not ss.get(f'{prefix}_n'):
+            ss[f'{prefix}_n'] = min(max(len(layers), 1), 6)
+        for i, layer in enumerate(layers):
+            nm = layer.get('name')
+            if nm is None:
+                continue
+            if ss.get(f'{prefix}_name_{i}') is None:
+                ss[f'{prefix}_name_{i}'] = nm
+            if ss.get(f'{prefix}_thick_{i}') is None:
+                ss[f'{prefix}_thick_{i}'] = layer.get('thickness_cm')
+            e_key = f'{prefix}_E_{i}_{nm}'
+            if ss.get(e_key) is None and layer.get('E_MPa') is not None:
+                ss[e_key] = layer.get('E_MPa')
+
+
 def _load_json(ss, uploaded_json):
     try:
         data = json.loads(uploaded_json.read().decode('utf-8'))
@@ -457,6 +510,8 @@ def _load_json(ss, uploaded_json):
                 ss[k] = {int(float(kk)): vv for kk, vv in v.items()}
             else:
                 ss[k] = v
+        _infer_missing_flex_state(ss)
+        _infer_missing_rigid_state(ss)
         st.success(f"✅ โหลดข้อมูลสำเร็จ! ({len(data)} รายการ)")
         st.rerun()
     except Exception as e:
