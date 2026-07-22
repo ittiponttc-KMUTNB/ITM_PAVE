@@ -8,6 +8,8 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
+_SKIP = object()   # sentinel: ค่านี้ save ไม่ได้/ไม่ควร save (เช่น bytes รูปภาพ, ไฟล์ upload)
+
 
 # ─────────────────────────────────────────────
 #  Session State Init
@@ -375,33 +377,63 @@ def render_sidebar():
 
 # ─────────────────────────────────────────────
 #  Save / Load JSON (private)
+#  บันทึก session_state ทั้งหมด (ไม่ใช้ allowlist ตายตัวอีกต่อไป)
+#  เพื่อไม่ให้ข้อมูลชั้นวัสดุ/ตารางออกแบบ/ค่าอ้างอิงต่างๆ หายตอน save/load
 # ─────────────────────────────────────────────
 
+def _to_jsonable(v):
+    """แปลงค่าให้ JSON-safe แบบ recursive — คืน _SKIP ถ้า serialize ไม่ได้/ไม่ควรเก็บ
+    (bytes เช่นรูปกราฟ/ไฟล์ report จะถูกข้าม เพราะ generate ใหม่ได้จากปุ่มในแอป
+    ไม่จำเป็นต้องแบกไว้ในไฟล์ save ให้ไฟล์ใหญ่โดยไม่จำเป็น)"""
+    if v is None or isinstance(v, (str, int, float, bool)):
+        return v
+    if isinstance(v, bytes):
+        return _SKIP
+    try:
+        import numpy as np
+        if isinstance(v, np.integer):
+            return int(v)
+        if isinstance(v, np.floating):
+            return float(v)
+        if isinstance(v, np.ndarray):
+            return v.tolist()
+    except ImportError:
+        pass
+    if isinstance(v, pd.DataFrame):
+        return {'__df__': True, 'records': v.to_dict('records')}
+    if isinstance(v, dict):
+        out = {}
+        for k, vv in v.items():
+            c = _to_jsonable(vv)
+            if c is not _SKIP:
+                out[str(k)] = c
+        return out
+    if isinstance(v, (list, tuple)):
+        out = []
+        for x in v:
+            c = _to_jsonable(x)
+            if c is not _SKIP:
+                out.append(c)
+        return out
+    # ชนิดอื่นที่ไม่รู้จัก (เช่น UploadedFile ของ st.file_uploader) — ลองส่งตรงๆ ไม่ได้ก็ข้าม
+    try:
+        json.dumps(v)
+        return v
+    except (TypeError, ValueError):
+        return _SKIP
+
+
 def _save_json(ss):
-    save_data = {
-        'project_name':   ss.get('project_name', ''),
-        'esal_rigid':     ss.esal_rigid,
-        'esal_flex':      {str(k): v for k, v in ss.esal_flex.items()},
-        'ldf':            ss.ldf,
-        'ddf':            ss.ddf,
-        'pt_global':      ss.pt_global,
-        'pt_rigid':       ss.pt_rigid,
-        'pt_flex':        ss.pt_flex,
-        'sn_list':        ss.sn_list,
-        'cbr_values':     ss.cbr_values,
-        'cbr_percentile': ss.cbr_percentile,
-        'cbr_design':     ss.cbr_design,
-        'mr_subgrade_psi':ss.mr_subgrade_psi,
-        'k_subgrade_pci': ss.k_subgrade_pci,
-        'flex_results':   ss.flex_results,
-        'k_inf':          ss.k_inf,
-        'k_corrected':    ss.k_corrected,
-        'ls_value':       ss.ls_value,
-        'rigid_results':  ss.rigid_results,
-        'traffic_df':     (ss.traffic_df.to_dict('records')
-                           if ss.traffic_df is not None else None),
+    save_data = {}
+    for key in list(ss.keys()):
+        val = _to_jsonable(ss[key])
+        if val is not _SKIP:
+            save_data[key] = val
+    save_data['__meta__'] = {
+        'saved_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'app':      'ITM Pave Pro',
     }
-    json_bytes = json.dumps(save_data, ensure_ascii=False, indent=2).encode('utf-8')
+    json_bytes = json.dumps(save_data, ensure_ascii=False, indent=2, default=str).encode('utf-8')
     st.download_button(
         "📥 Download JSON", json_bytes,
         file_name=f"itm_pave_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
@@ -413,21 +445,19 @@ def _save_json(ss):
 def _load_json(ss, uploaded_json):
     try:
         data = json.loads(uploaded_json.read().decode('utf-8'))
-        keys = [
-            'project_name', 'esal_rigid', 'ldf', 'ddf',
-            'pt_global', 'pt_rigid', 'pt_flex', 'sn_list',
-            'cbr_values', 'cbr_percentile', 'cbr_design',
-            'mr_subgrade_psi', 'k_subgrade_pci', 'flex_results',
-            'k_inf', 'k_corrected', 'ls_value', 'rigid_results',
-        ]
-        for k in keys:
-            if k in data:
-                ss[k] = data[k]
-        if 'esal_flex' in data:
-            ss.esal_flex = {float(k): v for k, v in data['esal_flex'].items()}
-        if data.get('traffic_df'):
-            ss.traffic_df = pd.DataFrame(data['traffic_df'])
-        st.success("✅ โหลดข้อมูลสำเร็จ!")
+        data.pop('__meta__', None)
+        for k, v in data.items():
+            if isinstance(v, dict) and v.get('__df__'):
+                ss[k] = pd.DataFrame(v.get('records', []))
+            elif k == 'esal_flex' and isinstance(v, dict):
+                # key เป็น SN (float) — JSON คืนมาเป็น string ต้องแปลงกลับ
+                ss[k] = {float(kk): vv for kk, vv in v.items()}
+            elif k == 'esal_rigid' and isinstance(v, dict):
+                # key เป็น D_cm (int) — JSON คืนมาเป็น string ต้องแปลงกลับ
+                ss[k] = {int(float(kk)): vv for kk, vv in v.items()}
+            else:
+                ss[k] = v
+        st.success(f"✅ โหลดข้อมูลสำเร็จ! ({len(data)} รายการ)")
         st.rerun()
     except Exception as e:
         st.error(f"❌ โหลดไม่สำเร็จ: {e}")
