@@ -43,18 +43,27 @@ if _pending is not None:
         if _k.startswith('_'):
             continue
         if isinstance(_v, dict) and _v.get('__df__'):
-            ss[_k] = pd.DataFrame(_v.get('records', []))
+            _val = pd.DataFrame(_v.get('records', []))
         elif _k == 'traffic_df' and isinstance(_v, list):
-            ss[_k] = pd.DataFrame(_v)
+            _val = pd.DataFrame(_v)
         elif _k == 'esal_flex' and isinstance(_v, dict):
             # key เป็น SN (float) — JSON คืนมาเป็น string ต้องแปลงกลับ
-            ss[_k] = {float(kk): vv for kk, vv in _v.items()}
+            _val = {float(kk): vv for kk, vv in _v.items()}
         elif _k == 'esal_rigid' and isinstance(_v, dict):
             # key เป็น D_cm (int) — JSON คืนมาเป็น string ต้องแปลงกลับ
-            ss[_k] = {int(float(kk)): vv for kk, vv in _v.items()}
+            _val = {int(float(kk)): vv for kk, vv in _v.items()}
         else:
-            ss[_k] = _v
-        _loaded_n += 1
+            _val = _v
+        try:
+            ss[_k] = _val
+            _loaded_n += 1
+        except Exception:
+            # key นี้เป็นของ widget ประเภทที่ Streamlit ห้าม set ผ่าน
+            # session_state โดยตรงเด็ดขาด (เช่น st.button, st.download_button,
+            # st.form_submit_button, st.file_uploader) — ตอน save ทั้ง session
+            # มันติดไปด้วยเพราะเป็นแค่สถานะปุ่มชั่วคราว ไม่ใช่ "ข้อมูล" จริง
+            # ข้ามไปเฉยๆ ไม่กระทบข้อมูลอื่น
+            pass
     # กู้คืน widget-state ล้วนๆ ที่ไฟล์เก่า (ก่อนแก้ save ให้ครอบคลุมทั้งเซสชัน) ไม่เคยบันทึกไว้
     _infer_missing_flex_state(ss)
     _infer_missing_rigid_state(ss)
