@@ -13,6 +13,111 @@ import numpy as np
 
 
 # ─────────────────────────────────────────────
+#  Keys ที่ต้องการ Save/Load
+# ─────────────────────────────────────────────
+
+# ── เก็บเฉพาะข้อมูลผลคำนวณ ไม่เก็บ widget keys ──
+# widget keys (fmat_*, fh_*, jpcp_name_*, ฯลฯ) Streamlit จัดการเอง
+# ห้าม set หลัง widget render แล้ว → แยกออกจาก SAVE_KEYS
+SAVE_KEYS = [
+    # Traffic & ESAL
+    'ldf', 'ddf', 'pt_global', 'pt_rigid', 'pt_flex',
+    'esal_rigid', 'esal_flex', 'sn_list',
+    # CBR
+    'cbr_values', 'cbr_percentile', 'cbr_design',
+    'mr_subgrade_psi', 'k_subgrade_pci',
+    'odemark_result',
+    'improve_soil_check',
+    # Flexible
+    'flex_results', 'r0_flex', 'so_flex', 'pi_flex',
+    # Rigid
+    'rigid_results', 'r0_rig', 'so_rig', 'zr_rig',
+    'k_inf', 'k_corrected', 'ls_value',
+    'jpcp_rec_d_cm', 'crcp_rec_d_cm',
+    'jpcp_design_params', 'crcp_design_params',
+    'jpcp_design_rows', 'crcp_design_rows',
+    'jpcp_k_eff', 'crcp_k_eff',
+    'jpcp_k_inf', 'crcp_k_inf',
+    'jpcp_ls_val', 'crcp_ls_val',
+    'jpcp_dsb', 'crcp_dsb',
+    'jpcp_esb', 'crcp_esb',
+    'jpcp_layers', 'crcp_layers',
+    'flex_structure_img',
+    # Layer editor Flexible — save เพื่อให้กลับมาแสดงได้
+    *[f'fmat_{i}'  for i in range(6)],
+    *[f'fh_{i}'    for i in range(6)],
+    *[f'fmi_{i}'   for i in range(6)],
+    *[f'fwear_{i}' for i in range(6)],
+    *[f'fbind_{i}' for i in range(6)],
+    *[f'fbase_{i}' for i in range(6)],
+    # Layer editor Rigid
+    *[f'jpcp_name_{i}'  for i in range(6)],
+    *[f'jpcp_thick_{i}' for i in range(6)],
+    *[f'crcp_name_{i}'  for i in range(6)],
+    *[f'crcp_thick_{i}' for i in range(6)],
+]
+
+# Widget keys ที่ห้าม set โดยตรง
+# (render ตลอดเวลาเพราะ st.tabs() render ทุก tab พร้อมกัน)
+_WIDGET_KEYS = {
+    # app.py
+    'project_name',
+    # tab2 CBR
+    'improve_soil_check', 'cbr_mode', 'pct_slider', 'design_cbr_input',
+    'imp_mat1', 'imp_mr1', 'imp_h1', 'imp_h2', 'imp_cbr2',
+    # tab3 Flexible
+    'r0_fl', 'so_fl', 'pi_fl', 'cbr_fl_input', 'mr_fl_input',
+    'pt_fl2_override', 'use_pt_global_fl', 'flex_sn_sel', 'flex_esal_manual',
+    *[f'fmat_{i}'       for i in range(6)],
+    *[f'fh_{i}'         for i in range(6)],
+    *[f'fmi_{i}'        for i in range(6)],
+    *[f'fsub_{i}'       for i in range(6)],
+    *[f'fwear_{i}'      for i in range(6)],
+    *[f'fbind_{i}'      for i in range(6)],
+    *[f'fbase_{i}'      for i in range(6)],
+    *[f'fcbr_sub_{i}'   for i in range(6)],
+    # tab4 Rigid
+    'r0_rig', 'so_rig', 'fc_cube', 'pt_rig_v7', 'cd_rig_radio',
+    'use_pt_global_rig', 'w18_manual_mode', 'w18_manual',
+    'jpcp_n', 'crcp_n', 'crcp_copy',
+    *[f'jpcp_name_{i}'  for i in range(6)],
+    *[f'jpcp_thick_{i}' for i in range(6)],
+    *[f'crcp_name_{i}'  for i in range(6)],
+    *[f'crcp_thick_{i}' for i in range(6)],
+    *[f'jpcp_ls'        for _ in range(1)],
+    *[f'crcp_ls'        for _ in range(1)],
+    *[f'jpcp_j'         for _ in range(1)],
+    *[f'crcp_j'         for _ in range(1)],
+}
+
+
+def _make_serializable(obj):
+    """แปลง object ให้ JSON serializable"""
+    if isinstance(obj, dict):
+        return {k: _make_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_make_serializable(v) for v in obj]
+    elif isinstance(obj, (np.integer,)):
+        return int(obj)
+    elif isinstance(obj, (np.floating,)):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, pd.DataFrame):
+        return obj.to_dict(orient='records')
+    elif isinstance(obj, bool):
+        return obj
+    elif obj is None or isinstance(obj, (int, float, str)):
+        return obj
+    else:
+        try:
+            return str(obj)
+        except Exception:
+            return None
+
+
+
+# ─────────────────────────────────────────────
 #  Combined Report Helpers
 # ─────────────────────────────────────────────
 
@@ -218,60 +323,8 @@ def _has_data(val) -> bool:
         return bool(val)
 
 
-# ─────────────────────────────────────────────
-#  Save ทั้ง session (ไม่ใช้ SAVE_KEYS allowlist อีกต่อไป)
-#  เพื่อไม่ให้ข้อมูล widget ของหน้าโครงสร้างชั้นทาง (fmat_i, jpcp_name_i,
-#  jpcp_n, flex_n_layers, fsub_i ฯลฯ) หลุดหายเหมือนที่ผ่านมา —
-#  การ apply ค่ากลับตอน Load ทำที่ app.py ก่อน st.tabs() render จึงไม่ชนกับ
-#  กฎ "ห้าม set widget key หลัง widget instantiate แล้ว" ของ Streamlit
-# ─────────────────────────────────────────────
-_SKIP = object()
-
-
-def _to_jsonable(v):
-    """แปลงค่าให้ JSON-safe แบบ recursive — คืน _SKIP ถ้า serialize ไม่ได้/ไม่ควรเก็บ
-    (bytes เช่นรูปกราฟ/ไฟล์ report จะถูกข้าม เพราะ generate ใหม่ได้จากปุ่มในแอป)"""
-    if v is None or isinstance(v, (str, int, float, bool)):
-        return v
-    if isinstance(v, bytes):
-        return _SKIP
-    if isinstance(v, np.integer):
-        return int(v)
-    if isinstance(v, np.floating):
-        return float(v)
-    if isinstance(v, np.ndarray):
-        return v.tolist()
-    if isinstance(v, pd.DataFrame):
-        return {'__df__': True, 'records': v.to_dict('records')}
-    if isinstance(v, dict):
-        out = {}
-        for k, vv in v.items():
-            c = _to_jsonable(vv)
-            if c is not _SKIP:
-                out[str(k)] = c
-        return out
-    if isinstance(v, (list, tuple)):
-        out = []
-        for x in v:
-            c = _to_jsonable(x)
-            if c is not _SKIP:
-                out.append(c)
-        return out
-    try:
-        json.dumps(v)
-        return v
-    except (TypeError, ValueError):
-        return _SKIP
-
-
 def render():
     ss = st.session_state
-
-    _just_loaded = ss.pop('_just_loaded_count', None)
-    if _just_loaded is not None:
-        st.success(f"✅ โหลดข้อมูลโปรเจกต์สำเร็จ — {_just_loaded} รายการ "
-                   f"(ข้อมูลอัปเดตในทุกแท็บแล้ว)")
-
     st.markdown("### 💾 Project Save / Load")
     st.markdown("บันทึกและโหลดข้อมูลโปรเจกต์ทั้งหมดเป็นไฟล์ JSON")
 
@@ -308,13 +361,17 @@ def render():
         if st.button("📥 สร้างไฟล์ Save", type="primary",
                       use_container_width=True, key="btn_save"):
             save_data = {}
-            _skip_keys = {'json_uploader'}  # widget key ของ file_uploader เอง ไม่ต้อง save
-            for key in list(ss.keys()):
-                if key.startswith('_') or key in _skip_keys:
-                    continue
-                val = _to_jsonable(ss[key])
-                if val is not _SKIP:
-                    save_data[key] = val
+            for key in SAVE_KEYS:
+                val = ss.get(key)
+                if val is not None:
+                    save_data[key] = _make_serializable(val)
+
+            # เพิ่ม traffic_df แยก
+            if ss.get('traffic_df') is not None:
+                try:
+                    save_data['traffic_df'] = ss['traffic_df'].to_dict(orient='records')
+                except Exception:
+                    pass
 
             save_data['_saved_at']      = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             save_data['_version']       = 'ITM_Pave_Pro_v3'
@@ -371,12 +428,27 @@ def render():
 
                 if st.button("📤 โหลดข้อมูลนี้", type="primary",
                               use_container_width=True, key="btn_load"):
-                    # เก็บข้อมูลไว้ใน session_state ชั่วคราวก่อน แล้ว rerun
-                    # การ set ค่าจริงให้ widget keys (fmat_i, jpcp_name_i ฯลฯ)
-                    # ต้องทำที่ app.py "ก่อน" st.tabs() render ในรอบถัดไป
-                    # ไม่งั้นจะชนกฎ "ห้าม set widget key หลัง widget instantiate แล้ว"
-                    # ของ Streamlit เพราะแท็บ 1-4 render ไปก่อนแท็บนี้ในทุกรอบ
-                    ss['_pending_load_data'] = data
+                    loaded = 0
+                    # widget keys ที่ Streamlit จัดการเอง — ห้าม set โดยตรง
+                    # ใช้ _WIDGET_KEYS ที่ define ไว้ด้านบน
+                    for key in SAVE_KEYS:
+                        if key in data and key not in _WIDGET_KEYS:
+                            ss[key] = data[key]
+                            loaded += 1
+                    # project_name — ใช้ st.session_state ผ่าน internal key
+                    if 'project_name' in data:
+                        # set ผ่าน key ที่ไม่ผูกกับ widget
+                        ss['_loaded_project_name'] = data['project_name']
+
+                    # โหลด traffic_df กลับเป็น DataFrame
+                    if 'traffic_df' in data and data['traffic_df']:
+                        try:
+                            ss['traffic_df'] = pd.DataFrame(data['traffic_df'])
+                        except Exception:
+                            pass
+
+                    st.success(f"✅ โหลดสำเร็จ — {loaded} รายการ")
+                    st.info("💡 กด Refresh หรือสลับ Tab เพื่อดูข้อมูลที่โหลดมา")
                     st.rerun()
 
             except Exception as e:
@@ -389,11 +461,13 @@ def render():
     with st.expander("🗑️ ล้างข้อมูลทั้งหมด", expanded=False):
         st.warning("⚠️ จะลบข้อมูลทั้งหมดในเซสชันนี้ — ไม่สามารถย้อนกลับได้")
         if st.button("🗑️ ล้างข้อมูลทั้งหมด", type="primary", key="btn_reset"):
-            # เดิมลบ key ตรงนี้เลย แต่แท็บ 1-4 render (สร้าง widget) ไปก่อนแท็บนี้
-            # ในทุกรอบอยู่แล้ว (st.tabs() render ทุกแท็บพร้อมกัน) การ del widget key
-            # ที่เพิ่ง instantiate ไปในรอบเดียวกันเสี่ยงชนกฎของ Streamlit เหมือนตอน Load
-            # จึงพัก flag ไว้แล้วให้ app.py ล้างจริงก่อน render แท็บใดๆ ในรอบถัดไป
-            ss['_pending_reset'] = True
+            # ใช้ _WIDGET_KEYS ที่ define ไว้ด้านบน
+            for key in SAVE_KEYS + ['traffic_df']:
+                if key in ss and key not in _WIDGET_KEYS:
+                    del ss[key]
+            from ui.core import ss_init
+            ss_init()
+            st.success("✅ ล้างข้อมูลแล้ว")
             st.rerun()
 
     # ════════════════════════════════
