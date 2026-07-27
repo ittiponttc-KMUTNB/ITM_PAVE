@@ -20,6 +20,46 @@ inject_css()
 
 ss = st.session_state
 
+# ── ล้างข้อมูลทั้งหมด (ถ้ากด "ล้างข้อมูลทั้งหมด" จากแท็บ Save/Load) ──
+# ต้องทำ "ก่อน" render แท็บใดๆ เหตุผลเดียวกับ Apply JSON ด้านล่าง
+if ss.pop('_pending_reset', None):
+    for _k in list(ss.keys()):
+        if not _k.startswith('_'):
+            del ss[_k]
+    ss_init()
+
+# ── Apply ข้อมูลที่โหลดจาก JSON (ถ้ามี) — ต้องทำ "ก่อน" render แท็บใดๆ ──
+# เพราะ st.tabs() ของ Streamlit จะ render ทุกแท็บพร้อมกันในทุก script run
+# ถ้า set session_state ให้ widget key (fmat_i, jpcp_name_i, jpcp_n ฯลฯ)
+# หลังจากแท็บนั้นๆ render ไปแล้วในรอบเดียวกัน จะชนกับกฎของ Streamlit
+# ("cannot be modified after the widget ... is instantiated") จึงต้อง
+# apply ตรงนี้ ซึ่งเป็นจุดที่ยังไม่มี widget ใดถูกสร้างในรอบนี้เลย
+_pending = ss.pop('_pending_load_data', None)
+if _pending is not None:
+    import pandas as pd
+    from ui.core import _infer_missing_flex_state, _infer_missing_rigid_state
+    _loaded_n = 0
+    for _k, _v in _pending.items():
+        if _k.startswith('_'):
+            continue
+        if isinstance(_v, dict) and _v.get('__df__'):
+            ss[_k] = pd.DataFrame(_v.get('records', []))
+        elif _k == 'traffic_df' and isinstance(_v, list):
+            ss[_k] = pd.DataFrame(_v)
+        elif _k == 'esal_flex' and isinstance(_v, dict):
+            # key เป็น SN (float) — JSON คืนมาเป็น string ต้องแปลงกลับ
+            ss[_k] = {float(kk): vv for kk, vv in _v.items()}
+        elif _k == 'esal_rigid' and isinstance(_v, dict):
+            # key เป็น D_cm (int) — JSON คืนมาเป็น string ต้องแปลงกลับ
+            ss[_k] = {int(float(kk)): vv for kk, vv in _v.items()}
+        else:
+            ss[_k] = _v
+        _loaded_n += 1
+    # กู้คืน widget-state ล้วนๆ ที่ไฟล์เก่า (ก่อนแก้ save ให้ครอบคลุมทั้งเซสชัน) ไม่เคยบันทึกไว้
+    _infer_missing_flex_state(ss)
+    _infer_missing_rigid_state(ss)
+    ss['_just_loaded_count'] = _loaded_n
+
 # ── Header ──
 st.markdown("""
 <div class="main-header">
